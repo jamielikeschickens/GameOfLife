@@ -25,7 +25,7 @@ in port  buttons = PORT_BUTTON;
 #define SHOW_DATA_OUT 1
 
 typedef struct {
-	uchar is_alive;
+	int is_alive;
 	uchar neighbours[8]; // Neighbours around the cell. Starts top left 0, by row.
 } Cell;
 
@@ -72,6 +72,7 @@ void buttonListener(in port b, chanend to_distributor) {
         prevButton = r;
     }
 }
+
 /////////////////////////////////////////////////////////////////////////////////////////
 //
 // Start your implementation by changing this function to farm out parts of the image...
@@ -139,6 +140,14 @@ void worker(chanend to_distributor) {
 			uchar val;
 			Cell *cell = &(cellGrid[row][column]);
 			val = cell->is_alive;
+			to_distributor <: val;
+		}
+	}
+
+	for (int row=1; row <= 4; ++row) {
+		for (int column=1; column <= IMWD; ++column) {
+			uchar val;
+			val = grid[row][column];
 			to_distributor <: val;
 		}
 	}
