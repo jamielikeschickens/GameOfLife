@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include "common.h"
 
-void harvest_results(chanend c_out, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
+void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
 void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
 
 void distributor(chanend c_in, chanend c_out, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener) {
@@ -23,11 +23,8 @@ void distributor(chanend c_in, chanend c_out, chanend to_worker_1, chanend to_wo
         if (button == BUTTON_A) {
             processImage(c_in, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
         } else if (button == BUTTON_C) {
-            harvest_results(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 	    }
 	}
-
-	printf( "ProcessImage:Done...\n" );
 }
 
 void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
@@ -136,37 +133,73 @@ void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanen
     }
 
     printf( "ProcessImage:Done...\n" );
+
+    // Wait for workers to send back the overlapping lines so we can send them back out
+    harvest_results(to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 }
 
-void harvest_results(chanend c_out, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+	while (1) {
+        // Store the overlapping lines we send
+        uchar worker_1_lines[2][IMWD+2];
 
-	// Start gathering data back and sending it to data out stream
-	for (int row=0; row < 4; ++row) {
-		for (int column=0; column < IMWD; ++column) {
-			uchar val;
-			to_worker_1 :> val;
-			c_out <: val;
-		}
+        for (int i=0; i < IMWD+2; ++i) {
+            to_worker_1 :> worker_1_lines[0][i];
+            to_worker_1 :> worker_1_lines[1][i];
+        }
+
+        uchar worker_2_lines[2][IMWD+2];
+
+        for (int i=0; i < IMWD+2; ++i) {
+            to_worker_2 :> worker_2_lines[0][i];
+            to_worker_2 :> worker_2_lines[1][i];
+        }
+
+        uchar worker_3_lines[2][IMWD+2];
+
+        for (int i=0; i < IMWD+2; ++i) {
+            to_worker_3 :> worker_3_lines[0][i];
+            to_worker_3 :> worker_3_lines[1][i];
+        }
+
+        uchar worker_4_lines[2][IMWD+2];
+
+        for (int i=0; i < IMWD+2; ++i) {
+            to_worker_4 :> worker_4_lines[0][i];
+            to_worker_4 :> worker_4_lines[1][i];
+        }
+
+        // Start sending the lines back out to workers
+        //
+
+
+
+        for (int i=0; i < IMWD+2; ++i) {
+            // Worker 1's top line is all blanks so he can just
+            // replace with blanks again
+        	uchar val = 0;
+        	to_worker_1 <: val;
+            to_worker_1 <: worker_2_lines[0][i];
+        }
+
+        for (int i =0; i < IMWD+2; ++i) {
+            to_worker_2 <: worker_1_lines[1][i];
+            to_worker_2 <: worker_3_lines[0][i];
+        }
+
+        for (int i=0; i < IMWD+2; ++i) {
+            to_worker_3 <: worker_2_lines[1][i];
+            to_worker_3 <: worker_4_lines[0][i];
+        }
+
+        for (int i=0; i < IMWD+2; ++i) {
+            uchar val = 0;
+            to_worker_4 <: worker_3_lines[0][i];
+            // Bottom row for 4 is blank as before so set those
+            to_worker_4 <: val;
+
+        }
+
+        printf("One iteration done, overlapping lines sent back\n");
 	}
-    for (int row=0; row < 4; ++row) {
-        for (int column=0; column < IMWD; ++column) {
-            uchar val;
-            to_worker_2 :> val;
-            c_out <: val;
-        }
-    }
-    for (int row=0; row < 4; ++row) {
-        for (int column=0; column < IMWD; ++column) {
-            uchar val;
-            to_worker_3 :> val;
-            c_out <: val;
-        }
-    }
-    for (int row=0; row < 4; ++row) {
-        for (int column=0; column < IMWD; ++column) {
-            uchar val;
-            to_worker_4 :> val;
-            c_out <: val;
-        }
-    }
 }

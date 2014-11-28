@@ -107,49 +107,61 @@ void applyRules(Cell *cell) {
 }
 
 void worker(chanend to_distributor) {
-	uchar grid[6][IMWD+2]; // Grid of 6x18 for buffer each side
+    uchar grid[6][IMWD+2]; // Grid of 6x18 for buffer each side
 
-	for (int row=0; row < 6; ++row) {
-		for (int column=0; column < IMWD+2; ++column) {
+    for (int row = 0; row < 6; ++row) {
+		for (int column = 0; column < IMWD + 2; ++column) {
 			uchar val;
-            to_distributor :> val;
+			to_distributor :> val;
 			grid[row][column] = val;
 		}
 	}
 
-	Cell cellGrid[4][IMWD];
-	for (int row = 1; row < 5; ++row) {
-	    for (int column=1; column < IMWD+1; ++column) {
-	        Cell *cell = &(cellGrid[row-1][column-1]);      //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
-	        cell->is_alive = grid[row][column];
-	        cell->neighbours[0] = grid[row+1][column-1];
-	        cell->neighbours[1] = grid[row+1][column];
-	        cell->neighbours[2] = grid[row+1][column+1];
-	        cell->neighbours[3] = grid[row][column-1];
-	        cell->neighbours[4] = grid[row][column+1];
-	        cell->neighbours[5] = grid[row-1][column-1];
-	        cell->neighbours[6] = grid[row-1][column];
-	        cell->neighbours[7] = grid[row-1][column+1];
+	while (1) {
 
-	        applyRules(cell);
-	    }
-	}
+		Cell cellGrid[4][IMWD];
+		for (int row = 1; row < 5; ++row) {
+			for (int column=1; column < IMWD+1; ++column) {
+				Cell *cell = &(cellGrid[row-1][column-1]);      //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
+				cell->is_alive = grid[row][column];
+				cell->neighbours[0] = grid[row+1][column-1];
+				cell->neighbours[1] = grid[row+1][column];
+				cell->neighbours[2] = grid[row+1][column+1];
+				cell->neighbours[3] = grid[row][column-1];
+				cell->neighbours[4] = grid[row][column+1];
+				cell->neighbours[5] = grid[row-1][column-1];
+				cell->neighbours[6] = grid[row-1][column];
+				cell->neighbours[7] = grid[row-1][column+1];
 
-	for (int row=0; row < 4; ++row) {
-		for (int column=0; column < IMWD; ++column) {
-			uchar val;
-			Cell *cell = &(cellGrid[row][column]);
-			val = cell->is_alive;
-			to_distributor <: val;
+				applyRules(cell);
+			}
 		}
-	}
 
-	for (int row=1; row <= 4; ++row) {
-		for (int column=1; column <= IMWD; ++column) {
-			uchar val;
-			val = grid[row][column];
-			to_distributor <: val;
+		for (int row=0; row < 4; ++row) {
+			for (int column=0; column < IMWD; ++column) {
+				uchar val;
+				Cell *cell = &(cellGrid[row][column]);
+				val = cell->is_alive;
+				//to_distributor <: val;
+			}
 		}
+
+		// Send top and bottom lines back to distributor so
+		// they can be harvested
+		for (int i=0; i < IMWD+2; ++i) {
+			to_distributor <: grid[1][i];
+			to_distributor <: grid[4][i];
+		}
+
+		// Get our overlapping lines from the distributor
+		for (int i=0; i < IMWD+2; ++i) {
+			uchar val;
+			to_distributor :> val;
+			grid[0][i] = val;
+			to_distributor :> val;
+			grid[5][i] = val;
+		}
+
 	}
 }
 
@@ -188,8 +200,8 @@ void DataOutStream(char outfname[], chanend c_in) {
 
 //MAIN PROCESS defining channels, orchestrating and starting the threads
 int main() {
-	char infname[] = "/home/ugrads/coms2013/fc13269/linux/Year2/conComp/workspace/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
-	char outfname[] = "/home/ugrads/coms2013/fc13269/linux/Year2/conComp/workspace/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
+	char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
+	char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
 	chan c_inIO, c_outIO; //extend your channel definitions here
 
 	chan worker_1, worker_2, worker_3, worker_4, to_distributor;
