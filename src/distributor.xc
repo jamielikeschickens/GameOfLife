@@ -30,6 +30,7 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
 	    to_button_listener :> button;
 
         if (button == BUTTON_A) {
+
         } else if (button == BUTTON_B) {
 
         } else if (button == BUTTON_C) {
@@ -160,9 +161,10 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
             isPaused = 1;
 			while (isPaused == 1) {
 				to_button_listener :> button;
-				printf(":) paused\n");
+				to_visualiser <: iteration_count;
 				if (button == BUTTON_B) {
 					isPaused = 0;
+					to_visualiser <: 0;
 				}
 			}
 		}
@@ -231,7 +233,6 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
         }
 
         ++iteration_count;
-        to_visualiser <: iteration_count;
         //printf("One iteration done, overlapping lines sent back\n");
 
 	}
