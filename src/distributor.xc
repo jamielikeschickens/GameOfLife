@@ -141,6 +141,19 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 
 }
 
+void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+	uchar command = (uchar)TERMINATE;
+	to_worker_1 <: command;
+	to_worker_2 <: command;
+	to_worker_3 <: command;
+	to_worker_4 <: command;
+	c_out <: command;
+	to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
+						 // however it never expects a negative number so we use this to signal terminate
+	int c = TERMINATE;
+	to_button_listener <: c;
+}
+
 void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
 	unsigned int iteration_count = 0;
 	int should_not_terminate = 1;
@@ -160,14 +173,21 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 			while (isPaused == 1) {
 				to_button_listener :> button;
 
-                // Continue listening for buttons
-                to_button_listener <: CONTINUE;
-
 				to_visualiser <: iteration_count;
 				if (button == BUTTON_B) {
 					isPaused = 0;
 					to_visualiser <: 0;
+				} else if (button == BUTTON_D) {
+					terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+					isPaused = 0;
+					should_not_terminate = 0;
 				}
+
+				if (button != BUTTON_D) {
+					// Continue listening for buttons
+					to_button_listener <: CONTINUE;
+				}
+
 			}
 		} else if (button == BUTTON_C) {
 			// Export game
@@ -181,20 +201,9 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 		    to_button_listener <: CONTINUE;
 
 		    receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-		    while (1) { }
+
 		} else if (button == BUTTON_D) {
-
-			uchar command = (uchar)TERMINATE;
-			to_worker_1 <: command;
-			to_worker_2 <: command;
-			to_worker_3 <: command;
-			to_worker_4 <: command;
-			c_out <: command;
-			to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
-								 // however it never expects a negative number so we use this to signal terminate
-			int c = TERMINATE;
-			to_button_listener <: c;
-
+			terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 			should_not_terminate = 0;
 		} else {
 			// If no buttons are pressed continue listening for buttons

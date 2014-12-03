@@ -300,6 +300,7 @@ void worker(chanend to_distributor) {
 // /////////////////////////////////////////////////////////////////////////////////////////
 void DataOutStream(char outfname[], chanend c_in) {
 	int res;
+	int i = 0;
 	uchar line[IMWD];
 	printf("DataOutStream:Start...\n");
 	res = _openoutpgm(outfname, IMWD, IMHT);
@@ -307,30 +308,32 @@ void DataOutStream(char outfname[], chanend c_in) {
 		printf("DataOutStream:Error opening %s\n.", outfname);
 		return;
 	}
-
-	int count = 0;
-	for (int y = 0; y < IMHT; y++) {
-		for (int x = 0; x < IMWD; x++) {
-			uchar command;
-			c_in :> command;
-			if (command == TERMINATE) {
-				// Terminate by returning from the function
-				return;
-			} else {
-				line[x] = command;
+	while (1) {
+		int count = 0;
+		for (int y = 0; y < IMHT; y++) {
+			for (int x = 0; x < IMWD; x++) {
+				uchar command;
+				c_in :> command;
+				if (command == TERMINATE) {
+					// Terminate by returning
+					_closeoutpgm();
+					return;
+				} else {
+					line[x] = command;
+				}
+	#if SHOW_DATA_OUT
+				printf("-%4.1d ", line[x]); //uncomment to show image values
+	#endif
+				++count;
 			}
-#if SHOW_DATA_OUT
-			printf("-%4.1d ", line[x]); //uncomment to show image values
-#endif
-			++count;
+	#if SHOW_DATA_OUT
+			printf("\n");
+	#endif
+			_writeoutline( line, IMWD );
 		}
-#if SHOW_DATA_OUT
-		printf("\n");
-#endif
-		_writeoutline( line, IMWD );
+		++i;
+		printf( "DataOutStream%d:Done...\n", i);
 	}
-	_closeoutpgm();
-	printf( "DataOutStream:Done...\n" );
 	return;
 }
 
