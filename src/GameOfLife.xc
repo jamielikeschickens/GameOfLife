@@ -19,9 +19,19 @@
 #include "distributor.h"
 
 in port  buttons = PORT_BUTTON;
+out port cled0 = PORT_CLOCKLED_0;
+out port cled1 = PORT_CLOCKLED_1;
+out port cled2 = PORT_CLOCKLED_2;
+out port cled3 = PORT_CLOCKLED_3;
+out port cledG = PORT_CLOCKLED_SELG;
+out port cledR = PORT_CLOCKLED_SELR;
+
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
+
 
 // Best to only display one at a time otherwise they will get mixed up in printing
-#define SHOW_DATA_IN 0
+#define SHOW_DATA_IN 1
 #define SHOW_DATA_OUT 1
 
 typedef struct {
@@ -66,11 +76,74 @@ void buttonListener(in port b, chanend to_distributor) {
     while (1) {
         b :> r; // check if some buttons are pressed
         // Button debouncing
-        if (prevButton == NO_BUTTON && r != NO_BUTTON) {
+        if (prevButton == NO_BUTTON) {
             to_distributor <: r; // send button pattern to userAnt
         }
         prevButton = r;
     }
+}
+
+//DISPLAYS an LED pattern in one quadrant of the clock LEDs
+int showLED(out port p, chanend fromVisualiser) {
+	unsigned int lightUpPattern;
+
+	while (1) {
+        fromVisualiser :> lightUpPattern; //read LED pattern from visualiser process
+        p <: lightUpPattern; //send pattern to LEDs
+	}
+
+    return 0;
+}
+
+void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
+	cledG <: 1;
+	int num;
+
+	while (1) {
+        from_distributor :> num;
+
+        // LED bits = 0b01110000
+        // Bits of int are opposite way for LED so swap them around then shfit to correct position
+        // Probably a much more efficient way to do this
+
+        // 0b0000 0111
+        int old = num;
+
+        // Clear bit
+        num = (old & ~0x4);
+        // Copy bit
+        num = (num | ((old & 0x1) << 2));
+
+        num = (num & ~0x1);
+        num = (num | ((old & 0x4) >> 2));
+        toQuadrant3 <: (num << 4);
+
+        // 0b0011 1000
+        num = (old & ~0x20);
+        num = (num | ((old & 0x8) << 2));
+
+        num = (num & ~0x8);
+        num = (num | ((old & 0x20) >> 2));
+        toQuadrant2 <: (num << 1);
+
+
+        // 0b1 1100 0000
+        num = (old & ~0x100);
+        num = (num | ((old & 0x40) << 2));
+
+        num = (num & ~0x40);
+        num = (num | ((old & 0x100) >> 2));
+        toQuadrant1 <: (num >> 2);
+
+        // 0b1110 0000 0000
+        num = (old & ~0x800);
+        num = (num | ((old & 0x200) << 2));
+
+        num = (num & ~0x200);
+        num = (num | ((old & 0x800) >> 2));
+
+        toQuadrant0 <: (num >> 5);
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -119,49 +192,60 @@ void worker(chanend to_distributor) {
 
 	while (1) {
 
-		Cell cellGrid[4][IMWD];
-		for (int row = 1; row < 5; ++row) {
-			for (int column=1; column < IMWD+1; ++column) {
-				Cell *cell = &(cellGrid[row-1][column-1]);      //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
-				cell->is_alive = grid[row][column];
-				cell->neighbours[0] = grid[row+1][column-1];
-				cell->neighbours[1] = grid[row+1][column];
-				cell->neighbours[2] = grid[row+1][column+1];
-				cell->neighbours[3] = grid[row][column-1];
-				cell->neighbours[4] = grid[row][column+1];
-				cell->neighbours[5] = grid[row-1][column-1];
-				cell->neighbours[6] = grid[row-1][column];
-				cell->neighbours[7] = grid[row-1][column+1];
+		uchar command;
+		to_distributor :> command;
 
-				applyRules(cell);
+		if (command == RETURN_DATA) {
+			for (int row = 1; row < 5; ++row) {
+				for (int column = 1; column < IMWD+1; ++column) {
+					to_distributor <: grid[row][column];
+				}
 			}
-		}
+		} else {
 
-		for (int row=0; row < 4; ++row) {
-			for (int column=0; column < IMWD; ++column) {
+			Cell cellGrid[4][IMWD];
+			for (int row = 1; row < 5; ++row) {
+				for (int column = 1; column < IMWD + 1; ++column) {
+					Cell *cell = &(cellGrid[row - 1][column - 1]); //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
+					cell->is_alive = grid[row][column];
+					cell->neighbours[0] = grid[row + 1][column - 1];
+					cell->neighbours[1] = grid[row + 1][column];
+					cell->neighbours[2] = grid[row + 1][column + 1];
+					cell->neighbours[3] = grid[row][column - 1];
+					cell->neighbours[4] = grid[row][column + 1];
+					cell->neighbours[5] = grid[row - 1][column - 1];
+					cell->neighbours[6] = grid[row - 1][column];
+					cell->neighbours[7] = grid[row - 1][column + 1];
+
+					applyRules(cell);
+
+				}
+			}
+
+			for (int row=1; row < 5; ++row) {
+				for (int column=1; column < IMWD+1; ++column) {
+					// Take cell value and put back into grid
+					grid[row][column] = cellGrid[row-1][column-1].is_alive;
+				}
+			}
+
+			// Send top and bottom lines back to distributor so
+			// they can be harvested
+			for (int i = 0; i < IMWD + 2; ++i) {
+				to_distributor <: grid[1][i];
+				to_distributor <: grid[4][i];
+			}
+
+			// Get our overlapping lines from the distributor
+			for (int i = 0; i < IMWD + 2; ++i) {
 				uchar val;
-				Cell *cell = &(cellGrid[row][column]);
-				val = cell->is_alive;
-				//to_distributor <: val;
+				to_distributor :> val;
+				grid[0][i] = val;
+				to_distributor :> val;
+				grid[5][i] = val;
 			}
-		}
 
-		// Send top and bottom lines back to distributor so
-		// they can be harvested
-		for (int i=0; i < IMWD+2; ++i) {
-			to_distributor <: grid[1][i];
-			to_distributor <: grid[4][i];
 		}
-
-		// Get our overlapping lines from the distributor
-		for (int i=0; i < IMWD+2; ++i) {
-			uchar val;
-			to_distributor :> val;
-			grid[0][i] = val;
-			to_distributor :> val;
-			grid[5][i] = val;
-		}
-
 	}
 }
 
@@ -199,24 +283,28 @@ void DataOutStream(char outfname[], chanend c_in) {
 }
 
 //MAIN PROCESS defining channels, orchestrating and starting the threads
-int main() {
-	char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
-	char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
+int main(void) {
 	chan c_inIO, c_outIO; //extend your channel definitions here
 
-	chan worker_1, worker_2, worker_3, worker_4, to_distributor;
+	chan worker_1, worker_2, worker_3, worker_4, to_distributor, quadrant0, quadrant1, quadrant2, quadrant3, to_visualiser; //helper channels for LED visualisation
+
 
 	par //extend/change this par statement
 	{
-	    buttonListener(buttons, to_distributor);
-		DataInStream(infname, c_inIO);
-		distributor(c_inIO, c_outIO, worker_1, worker_2, worker_3, worker_4, to_distributor);
-		worker(worker_1);
-		worker(worker_2);
-		worker(worker_3);
-		worker(worker_4);
-		DataOutStream( outfname, c_outIO );
+	    on stdcore[0]: buttonListener(buttons, to_distributor);
+	    on stdcore[1]: DataInStream(infname, c_inIO);
+	    on stdcore[2]: distributor(c_inIO, c_outIO, to_visualiser, worker_1, worker_2, worker_3, worker_4, to_distributor);
+	    on stdcore[0]: worker(worker_1);
+	    on stdcore[1]: worker(worker_2);
+	    on stdcore[2]: worker(worker_3);
+	    on stdcore[3]: worker(worker_4);
+	    on stdcore[1]: DataOutStream( outfname, c_outIO );
+
+	    on stdcore[0]: visualiser(to_visualiser, quadrant0, quadrant1, quadrant2, quadrant3);
+	    on stdcore[0]: showLED(cled0,quadrant0);
+	    on stdcore[1]: showLED(cled1,quadrant1);
+	    on stdcore[2]: showLED(cled2,quadrant2);
+	    on stdcore[3]: showLED(cled3,quadrant3);
 	}
-	printf("Main:Done...\n");
 	return 0;
 }

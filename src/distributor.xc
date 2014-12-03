@@ -8,26 +8,38 @@
 #include <platform.h>
 #include <stdio.h>
 #include "common.h"
+#include "distributor.h"
 
-void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
-void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
+void harvest_results(chanend c_out, chanend button_listener, chanend to_visaliser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
+void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
+void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4);
 
-void distributor(chanend c_in, chanend c_out, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener) {
+void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener) {
 	//This code is to be replaced – it is a place holder for farming out the work...
 
 	int button;
+	to_button_listener :> button;
+	while (button != BUTTON_A) {
+		to_button_listener :> button;
+	}
+    processImage(c_out, c_in, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+    // Wait for workers to send back the overlapping lines so we can send them back out
+    harvest_results(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
 	while (1) {
 	    to_button_listener :> button;
 
         if (button == BUTTON_A) {
-            processImage(c_in, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+        } else if (button == BUTTON_B) {
+
         } else if (button == BUTTON_C) {
+
+
 	    }
 	}
 }
 
-void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
     printf("ProcessImage:Start, size = %dx%d\n", IMHT, IMWD);
 
     uchar val;
@@ -134,12 +146,33 @@ void processImage(chanend c_in, chanend to_worker_1, chanend to_worker_2, chanen
 
     printf( "ProcessImage:Done...\n" );
 
-    // Wait for workers to send back the overlapping lines so we can send them back out
-    harvest_results(to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 }
 
-void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+	unsigned int iteration_count = 0;
+
 	while (1) {
+		int isPaused = 0;
+
+		int button;
+		to_button_listener :> button;
+		if (button == BUTTON_B) {
+            isPaused = 1;
+			while (isPaused == 1) {
+				to_button_listener :> button;
+				printf(":) paused\n");
+				if (button == BUTTON_B) {
+					isPaused = 0;
+				}
+			}
+		}
+
+        uchar command = (uchar)CONTINUE;
+        to_worker_1 <: command;
+        to_worker_2 <: command;
+        to_worker_3 <: command;
+        to_worker_4 <: command;
+
         // Store the overlapping lines we send
         uchar worker_1_lines[2][IMWD+2];
 
@@ -171,9 +204,6 @@ void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker
 
         // Start sending the lines back out to workers
         //
-
-
-
         for (int i=0; i < IMWD+2; ++i) {
             // Worker 1's top line is all blanks so he can just
             // replace with blanks again
@@ -182,7 +212,7 @@ void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker
             to_worker_1 <: worker_2_lines[0][i];
         }
 
-        for (int i =0; i < IMWD+2; ++i) {
+        for (int i=0; i < IMWD+2; ++i) {
             to_worker_2 <: worker_1_lines[1][i];
             to_worker_2 <: worker_3_lines[0][i];
         }
@@ -194,12 +224,56 @@ void harvest_results(chanend to_worker_1, chanend to_worker_2, chanend to_worker
 
         for (int i=0; i < IMWD+2; ++i) {
             uchar val = 0;
-            to_worker_4 <: worker_3_lines[0][i];
+            to_worker_4 <: worker_3_lines[1][i];
             // Bottom row for 4 is blank as before so set those
             to_worker_4 <: val;
 
         }
 
-        printf("One iteration done, overlapping lines sent back\n");
+        ++iteration_count;
+        to_visualiser <: iteration_count;
+        //printf("One iteration done, overlapping lines sent back\n");
+
+	}
+
+	uchar command = (uchar)RETURN_DATA;
+    to_worker_1 <: command;
+    to_worker_2 <: command;
+    to_worker_3 <: command;
+    to_worker_4 <: command;
+
+    receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+
+}
+
+void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+	for (int row=0; row < 4; ++row) {
+		for (int column=0; column < IMWD; ++column) {
+            uchar val;
+            worker_1 :> val;
+            c_out <: val;
+		}
+	}
+	for (int row=0; row < 4; ++row) {
+		for (int column=0; column < IMWD; ++column) {
+            uchar val;
+            worker_2 :> val;
+            c_out <: val;
+		}
+	}
+
+	for (int row=0; row < 4; ++row) {
+		for (int column=0; column < IMWD; ++column) {
+            uchar val;
+            worker_3 :> val;
+            c_out <: val;
+		}
+	}
+	for (int row=0; row < 4; ++row) {
+		for (int column=0; column < IMWD; ++column) {
+            uchar val;
+            worker_4 :> val;
+            c_out <: val;
+		}
 	}
 }
