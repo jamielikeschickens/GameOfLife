@@ -19,25 +19,17 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
 
 	int button;
 	to_button_listener :> button;
+	to_button_listener <: CONTINUE;
+
 	while (button != BUTTON_A) {
 		to_button_listener :> button;
+		to_button_listener <: CONTINUE;
 	}
     processImage(c_out, c_in, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
     // Wait for workers to send back the overlapping lines so we can send them back out
     harvest_results(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
-	while (1) {
-	    to_button_listener :> button;
-
-        if (button == BUTTON_A) {
-
-        } else if (button == BUTTON_B) {
-
-        } else if (button == BUTTON_C) {
-
-
-	    }
-	}
+    printf("Distributor temrinate\n");
 }
 
 void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
@@ -151,99 +143,151 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 
 void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
 	unsigned int iteration_count = 0;
+	int should_not_terminate = 1;
 
-	while (1) {
+	while (should_not_terminate) {
 		int isPaused = 0;
 
 		int button;
 		to_button_listener :> button;
+
 		if (button == BUTTON_B) {
+
+			// Continue listening for buttons
+			to_button_listener <: CONTINUE;
+
             isPaused = 1;
 			while (isPaused == 1) {
 				to_button_listener :> button;
+
+                // Continue listening for buttons
+                to_button_listener <: CONTINUE;
+
 				to_visualiser <: iteration_count;
 				if (button == BUTTON_B) {
 					isPaused = 0;
 					to_visualiser <: 0;
 				}
 			}
+		} else if (button == BUTTON_C) {
+			// Export game
+			uchar command = (uchar)RETURN_DATA;
+		    to_worker_1 <: command;
+		    to_worker_2 <: command;
+		    to_worker_3 <: command;
+		    to_worker_4 <: command;
+
+		    // Tell button listener to continue to listen
+		    to_button_listener <: CONTINUE;
+
+		    receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+		    while (1) { }
+		} else if (button == BUTTON_D) {
+
+			uchar command = (uchar)TERMINATE;
+			to_worker_1 <: command;
+			to_worker_2 <: command;
+			to_worker_3 <: command;
+			to_worker_4 <: command;
+			c_out <: command;
+			to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
+								 // however it never expects a negative number so we use this to signal terminate
+			int c = TERMINATE;
+			to_button_listener <: c;
+
+			should_not_terminate = 0;
+		} else {
+			// If no buttons are pressed continue listening for buttons
+			to_button_listener <: CONTINUE;
+
+
+            uchar command = (uchar)CONTINUE;
+            to_worker_1 <: command;
+            to_worker_2 <: command;
+            to_worker_3 <: command;
+            to_worker_4 <: command;
+
+            // Store the overlapping lines we send
+            uchar worker_1_lines[2][IMWD+2];
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_1 :> worker_1_lines[0][i];
+                to_worker_1 :> worker_1_lines[1][i];
+            }
+
+
+            // Get alive cells count from worker after recieving lines
+            int alive_cells_1;
+            to_worker_1 :> alive_cells_1;
+
+
+            uchar worker_2_lines[2][IMWD+2];
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_2 :> worker_2_lines[0][i];
+                to_worker_2 :> worker_2_lines[1][i];
+            }
+
+            int alive_cells_2;
+            to_worker_2 :> alive_cells_2;
+
+
+            uchar worker_3_lines[2][IMWD+2];
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_3 :> worker_3_lines[0][i];
+                to_worker_3 :> worker_3_lines[1][i];
+            }
+
+            int alive_cells_3;
+            to_worker_3 :> alive_cells_3;
+
+
+            uchar worker_4_lines[2][IMWD+2];
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_4 :> worker_4_lines[0][i];
+                to_worker_4 :> worker_4_lines[1][i];
+            }
+
+            int alive_cells_4;
+            to_worker_4 :> alive_cells_4;
+
+            // Send visualiser alive cells after each iteration
+            to_visualiser <: (alive_cells_1 + alive_cells_2 + alive_cells_3 + alive_cells_4);
+
+
+            // Start sending the lines back out to workers
+            //
+            for (int i=0; i < IMWD+2; ++i) {
+                // Worker 1's top line is all blanks so he can just
+                // replace with blanks again
+                uchar val = 0;
+                to_worker_1 <: val;
+                to_worker_1 <: worker_2_lines[0][i];
+            }
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_2 <: worker_1_lines[1][i];
+                to_worker_2 <: worker_3_lines[0][i];
+            }
+
+            for (int i=0; i < IMWD+2; ++i) {
+                to_worker_3 <: worker_2_lines[1][i];
+                to_worker_3 <: worker_4_lines[0][i];
+            }
+
+            for (int i=0; i < IMWD+2; ++i) {
+                uchar val = 0;
+                to_worker_4 <: worker_3_lines[1][i];
+                // Bottom row for 4 is blank as before so set those
+                to_worker_4 <: val;
+
+            }
+
+            ++iteration_count;
 		}
-
-        uchar command = (uchar)CONTINUE;
-        to_worker_1 <: command;
-        to_worker_2 <: command;
-        to_worker_3 <: command;
-        to_worker_4 <: command;
-
-        // Store the overlapping lines we send
-        uchar worker_1_lines[2][IMWD+2];
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_1 :> worker_1_lines[0][i];
-            to_worker_1 :> worker_1_lines[1][i];
-        }
-
-        uchar worker_2_lines[2][IMWD+2];
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_2 :> worker_2_lines[0][i];
-            to_worker_2 :> worker_2_lines[1][i];
-        }
-
-        uchar worker_3_lines[2][IMWD+2];
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_3 :> worker_3_lines[0][i];
-            to_worker_3 :> worker_3_lines[1][i];
-        }
-
-        uchar worker_4_lines[2][IMWD+2];
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_4 :> worker_4_lines[0][i];
-            to_worker_4 :> worker_4_lines[1][i];
-        }
-
-        // Start sending the lines back out to workers
-        //
-        for (int i=0; i < IMWD+2; ++i) {
-            // Worker 1's top line is all blanks so he can just
-            // replace with blanks again
-        	uchar val = 0;
-        	to_worker_1 <: val;
-            to_worker_1 <: worker_2_lines[0][i];
-        }
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_2 <: worker_1_lines[1][i];
-            to_worker_2 <: worker_3_lines[0][i];
-        }
-
-        for (int i=0; i < IMWD+2; ++i) {
-            to_worker_3 <: worker_2_lines[1][i];
-            to_worker_3 <: worker_4_lines[0][i];
-        }
-
-        for (int i=0; i < IMWD+2; ++i) {
-            uchar val = 0;
-            to_worker_4 <: worker_3_lines[1][i];
-            // Bottom row for 4 is blank as before so set those
-            to_worker_4 <: val;
-
-        }
-
-        ++iteration_count;
-        //printf("One iteration done, overlapping lines sent back\n");
-
 	}
-
-	uchar command = (uchar)RETURN_DATA;
-    to_worker_1 <: command;
-    to_worker_2 <: command;
-    to_worker_3 <: command;
-    to_worker_4 <: command;
-
-    receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
 }
 

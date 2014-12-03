@@ -73,77 +73,109 @@ void DataInStream(char infname[], chanend c_out) {
 void buttonListener(in port b, chanend to_distributor) {
     int r;
     int prevButton = 15;
-    while (1) {
+    int should_not_terminate = 1;
+
+    while (should_not_terminate) {
         b :> r; // check if some buttons are pressed
+
         // Button debouncing
         if (prevButton == NO_BUTTON) {
             to_distributor <: r; // send button pattern to userAnt
+
+            // Check for termination command from distributor
+            int terminate_command;
+            to_distributor :> terminate_command;
+
+             if (terminate_command == TERMINATE) {
+                should_not_terminate = 0;
+            }
+
         }
         prevButton = r;
     }
+    printf("Button listener terminate\n");
 }
 
 //DISPLAYS an LED pattern in one quadrant of the clock LEDs
 int showLED(out port p, chanend fromVisualiser) {
 	unsigned int lightUpPattern;
+	int should_not_terminate = 1;
 
-	while (1) {
+	while (should_not_terminate) {
         fromVisualiser :> lightUpPattern; //read LED pattern from visualiser process
-        p <: lightUpPattern; //send pattern to LEDs
+        if (lightUpPattern == TERMINATE) {
+        	should_not_terminate = 0;
+        } else {
+            p <: lightUpPattern; //send pattern to LEDs
+        }
 	}
-
+	printf("Show led terminate\n");
     return 0;
 }
 
 void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
 	cledG <: 1;
 	int num;
+	int should_not_terminate = 1;
 
-	while (1) {
+	while (should_not_terminate) {
         from_distributor :> num;
 
-        // LED bits = 0b01110000
-        // Bits of int are opposite way for LED so swap them around then shfit to correct position
-        // Probably a much more efficient way to do this
+        if (num == -1) {
+        	// If we recieve -1 shut down LEDs and visualiser
+        	should_not_terminate = 0;
 
-        // 0b0000 0111
-        int old = num;
+        	int command = TERMINATE;
+        	toQuadrant0 <: command;
+        	toQuadrant1 <: command;
+        	toQuadrant2 <: command;
+        	toQuadrant3 <: command;
 
-        // Clear bit
-        num = (old & ~0x4);
-        // Copy bit
-        num = (num | ((old & 0x1) << 2));
+        } else {
+            // LED bits = 0b01110000
+            // Bits of int are opposite way for LED so swap them around then shfit to correct position
+            // Probably a much more efficient way to do this
 
-        num = (num & ~0x1);
-        num = (num | ((old & 0x4) >> 2));
-        toQuadrant3 <: (num << 4);
+            // 0b0000 0111
+            int old = num;
 
-        // 0b0011 1000
-        num = (old & ~0x20);
-        num = (num | ((old & 0x8) << 2));
+            // Clear bit
+            num = (old & ~0x4);
+            // Copy bit
+            num = (num | ((old & 0x1) << 2));
 
-        num = (num & ~0x8);
-        num = (num | ((old & 0x20) >> 2));
-        toQuadrant2 <: (num << 1);
+            num = (num & ~0x1);
+            num = (num | ((old & 0x4) >> 2));
+            toQuadrant3 <: (num << 4);
+
+            // 0b0011 1000
+            num = (old & ~0x20);
+            num = (num | ((old & 0x8) << 2));
+
+            num = (num & ~0x8);
+            num = (num | ((old & 0x20) >> 2));
+            toQuadrant2 <: (num << 1);
 
 
-        // 0b1 1100 0000
-        num = (old & ~0x100);
-        num = (num | ((old & 0x40) << 2));
+            // 0b1 1100 0000
+            num = (old & ~0x100);
+            num = (num | ((old & 0x40) << 2));
 
-        num = (num & ~0x40);
-        num = (num | ((old & 0x100) >> 2));
-        toQuadrant1 <: (num >> 2);
+            num = (num & ~0x40);
+            num = (num | ((old & 0x100) >> 2));
+            toQuadrant1 <: (num >> 2);
 
-        // 0b1110 0000 0000
-        num = (old & ~0x800);
-        num = (num | ((old & 0x200) << 2));
+            // 0b1110 0000 0000
+            num = (old & ~0x800);
+            num = (num | ((old & 0x200) << 2));
 
-        num = (num & ~0x200);
-        num = (num | ((old & 0x800) >> 2));
+            num = (num & ~0x200);
+            num = (num | ((old & 0x800) >> 2));
 
-        toQuadrant0 <: (num >> 5);
+            toQuadrant0 <: (num >> 5);
+        }
 	}
+	printf("Visualiser terminate\n");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -181,6 +213,7 @@ void applyRules(Cell *cell) {
 
 void worker(chanend to_distributor) {
     uchar grid[6][IMWD+2]; // Grid of 6x18 for buffer each side
+    int should_not_terminate = 1;
 
     for (int row = 0; row < 6; ++row) {
 		for (int column = 0; column < IMWD + 2; ++column) {
@@ -190,7 +223,7 @@ void worker(chanend to_distributor) {
 		}
 	}
 
-	while (1) {
+	while (should_not_terminate) {
 
 		uchar command;
 		to_distributor :> command;
@@ -201,6 +234,8 @@ void worker(chanend to_distributor) {
 					to_distributor <: grid[row][column];
 				}
 			}
+		} else if (command == TERMINATE) {
+			should_not_terminate = 0;
 		} else {
 
 			Cell cellGrid[4][IMWD];
@@ -222,10 +257,17 @@ void worker(chanend to_distributor) {
 				}
 			}
 
+			int alive_counter = 0;
+
 			for (int row=1; row < 5; ++row) {
 				for (int column=1; column < IMWD+1; ++column) {
 					// Take cell value and put back into grid
 					grid[row][column] = cellGrid[row-1][column-1].is_alive;
+
+					// Keep running count of alive cells encountered
+					if (cellGrid[row-1][column-1].is_alive == 255) {
+						++alive_counter;
+					}
 				}
 			}
 
@@ -235,6 +277,8 @@ void worker(chanend to_distributor) {
 				to_distributor <: grid[1][i];
 				to_distributor <: grid[4][i];
 			}
+
+			to_distributor <: alive_counter;
 
 			// Get our overlapping lines from the distributor
 			for (int i = 0; i < IMWD + 2; ++i) {
@@ -247,6 +291,7 @@ void worker(chanend to_distributor) {
 
 		}
 	}
+    printf("worker terminate\n");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -266,7 +311,14 @@ void DataOutStream(char outfname[], chanend c_in) {
 	int count = 0;
 	for (int y = 0; y < IMHT; y++) {
 		for (int x = 0; x < IMWD; x++) {
-			c_in :> line[x];
+			uchar command;
+			c_in :> command;
+			if (command == TERMINATE) {
+				// Terminate by returning from the function
+				return;
+			} else {
+				line[x] = command;
+			}
 #if SHOW_DATA_OUT
 			printf("-%4.1d ", line[x]); //uncomment to show image values
 #endif
