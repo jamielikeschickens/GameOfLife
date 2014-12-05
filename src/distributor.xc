@@ -154,6 +154,17 @@ void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visuali
 	to_button_listener <: c;
 }
 
+void print_grid(chanend c_out, chanend to_button_listener, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+	// Export game
+	uchar command = (uchar)RETURN_DATA;
+	to_worker_1 <: command;
+	to_worker_2 <: command;
+	to_worker_3 <: command;
+	to_worker_4 <: command;
+
+	receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+}
+
 void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
 	unsigned int iteration_count = 0;
 	int should_not_terminate = 1;
@@ -177,6 +188,8 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 				if (button == BUTTON_B) {
 					isPaused = 0;
 					to_visualiser <: 0;
+				} else if (button == BUTTON_C) {
+					print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 				} else if (button == BUTTON_D) {
 					terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 					isPaused = 0;
@@ -190,18 +203,8 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
 			}
 		} else if (button == BUTTON_C) {
-			// Export game
-			uchar command = (uchar)RETURN_DATA;
-		    to_worker_1 <: command;
-		    to_worker_2 <: command;
-		    to_worker_3 <: command;
-		    to_worker_4 <: command;
-
-		    // Tell button listener to continue to listen
-		    to_button_listener <: CONTINUE;
-
-		    receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-
+			print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+			to_button_listener <: CONTINUE;
 		} else if (button == BUTTON_D) {
 			terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 			should_not_terminate = 0;
