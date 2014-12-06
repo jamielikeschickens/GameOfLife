@@ -77,7 +77,6 @@ void buttonListener(in port b, chanend to_distributor) {
 
     while (should_not_terminate) {
         b :> r; // check if some buttons are pressed
-
         // Button debouncing
         if (prevButton == NO_BUTTON) {
             to_distributor <: r; // send button pattern to userAnt
@@ -85,7 +84,6 @@ void buttonListener(in port b, chanend to_distributor) {
             // Check for termination command from distributor
             int terminate_command;
             to_distributor :> terminate_command;
-            printf("Terminate command: %d\n", terminate_command);
 
              if (terminate_command == TERMINATE) {
                 should_not_terminate = 0;
@@ -226,7 +224,7 @@ void worker(chanend to_distributor) {
 	}
 
 	while (should_not_terminate) {
-		int isPaused = 0;
+		int is_paused = 0;
 		int command;
 
 
@@ -244,45 +242,51 @@ void worker(chanend to_distributor) {
 				cell->neighbours[6] = grid[row - 1][column];
 				cell->neighbours[7] = grid[row - 1][column + 1];
 
-				select {
-					case to_distributor :> command:
-                        printf("Command from distributor: %d\n", command);
-                        if (command == RETURN_DATA) {
-                            for (int row = 1; row < 5; ++row) {
-                                for (int column = 1; column < IMWD+1; ++column) {
-                                    to_distributor <: grid[row][column];
-                                }
-                            }
-                        } else if (command == TERMINATE) {
-                            should_not_terminate = 0;
-                        } else if (command == PAUSE) {
-                            isPaused = 1;
-                            int command;
+                applyRules(cell);
+                int command;
 
-                            while (isPaused == 1) {
-                                to_distributor :> command;
-                                printf("Command from distributor: %d\n", command);
-                                if (command == UNPAUSE) {
-                                    isPaused = 0;
-                                } else if (command == RETURN_DATA) {
-                                    for (int row = 1; row < 5; ++row) {
-                                        for (int column = 1; column < IMWD+1; ++column) {
-                                            to_distributor <: grid[row][column];
-                                        }
-                                    }
-                                    isPaused = 0;
-                                } else if (command == TERMINATE) {
-                                    isPaused = 0;
-                                    should_not_terminate = 0;
-                                }
-                            }
-                        }
-					break;
-					default:
-						//printf("Applying rules\n");
-                        applyRules(cell);
-					break;
-				}
+                select {
+                	case to_distributor :> command:
+                		if (command == PAUSE) {
+                			is_paused = 1;
+							printf("Paused\n");
+                			while (is_paused) {
+                				to_distributor :> command;
+                				if (command == UNPAUSE) {
+                					printf("Unpaused\n");
+                					is_paused = 0;
+                				} if (command == TERMINATE) {
+                					is_paused = 0;
+                					should_not_terminate = 0;
+                				} if (command == RETURN_DATA) {
+                        			for (int row = 1; row < 5; ++ row) {
+                        				for (int column = 1; column < IMWD + 1; ++column) {
+                        					to_distributor <: grid[row][column];
+                        				}
+                        			}
+                				}
+                			}
+                		} else if (command == TERMINATE) {
+                			should_not_terminate = 0;
+                		} else if (command == RETURN_DATA) {
+                			for (int row = 1; row < 5; ++ row) {
+                				for (int column = 1; column < IMWD + 1; ++column) {
+                					to_distributor <: grid[row][column];
+                				}
+                			}
+                		}
+                	break;
+                	default:
+                		break;
+                }
+
+                if (row == 4 && column == IMWD && should_not_terminate == 1) {
+                	// We've just applied our last rule
+                	to_distributor <: FINISH_PROCESSING;
+                	// Block until we recieve a message from distributor
+                	int c;
+                	to_distributor :> c;
+                }
 
 			}
 		}
@@ -305,8 +309,6 @@ void worker(chanend to_distributor) {
             // Send top and bottom lines back to distributor so
             // they can be harvested
 
-            // When we're ready to send data back send READ_TO_SEND signal
-            to_distributor <: READY_TO_SEND;
 
             for (int i = 0; i < IMWD + 2; ++i) {
                 to_distributor <: grid[1][i];
@@ -323,7 +325,7 @@ void worker(chanend to_distributor) {
                 to_distributor :> val;
                 grid[5][i] = val;
             }
-        }
+		}
 	}
     printf("worker terminate\n");
 }

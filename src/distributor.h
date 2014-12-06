@@ -12,7 +12,7 @@
 #define CONTINUE 20
 #define PAUSE 30
 #define TERMINATE 40
-#define READY_TO_SEND 50
+#define FINISH_PROCESSING 50
 #define UNPAUSE 60
 
 
