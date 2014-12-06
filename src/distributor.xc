@@ -142,12 +142,12 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 }
 
 void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
-	uchar command = (uchar)TERMINATE;
+	int command = TERMINATE;
 	to_worker_1 <: command;
 	to_worker_2 <: command;
 	to_worker_3 <: command;
 	to_worker_4 <: command;
-	c_out <: command;
+	c_out <: (uchar)command;
 	to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
 						 // however it never expects a negative number so we use this to signal terminate
 	int c = TERMINATE;
@@ -172,106 +172,128 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 	while (should_not_terminate) {
 		int isPaused = 0;
 
+        uchar worker_1_lines[2][IMWD+2];
+        uchar worker_2_lines[2][IMWD+2];
+        uchar worker_3_lines[2][IMWD+2];
+        uchar worker_4_lines[2][IMWD+2];
+
+        int alive_cells_1;
+        int alive_cells_2;
+        int alive_cells_3;
+        int alive_cells_4;
+
+        int received_worker_1 = 0;
+        int received_worker_2 = 0;
+        int received_worker_3 = 0;
+        int received_worker_4 = 0;
+
 		int button;
-		to_button_listener :> button;
+		int command;
 
-		if (button == BUTTON_B) {
+		while (received_worker_1 != 1 || received_worker_2 != 1 || received_worker_3 != 1 || received_worker_4 != 1) {
+            select {
+                case to_button_listener :> button:
 
-			// Continue listening for buttons
-			to_button_listener <: CONTINUE;
+                	if (button == BUTTON_B) {
+                 		// Tell button listener to continue
+                		to_button_listener <: CONTINUE;
 
-            isPaused = 1;
-			while (isPaused == 1) {
-				to_button_listener :> button;
+                		int command_to_workers = 0;
+                		isPaused = 1;
+                		command_to_workers = PAUSE;
+                        to_worker_1 <: command_to_workers;
+                        to_worker_2 <: command_to_workers;
+                        to_worker_3 <: command_to_workers;
+                        to_worker_4 <: command_to_workers;
 
-				to_visualiser <: iteration_count;
-				if (button == BUTTON_B) {
-					isPaused = 0;
-					to_visualiser <: 0;
-				} else if (button == BUTTON_C) {
-					print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-				} else if (button == BUTTON_D) {
-					terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-					isPaused = 0;
-					should_not_terminate = 0;
-				}
+                		while (isPaused == 1) {
+                			to_button_listener :> button;
 
-				if (button != BUTTON_D) {
-					// Continue listening for buttons
-					to_button_listener <: CONTINUE;
-				}
+                			if (button == BUTTON_B) {
+                                to_button_listener <: CONTINUE;
+                				isPaused = 0;
+                				command_to_workers = UNPAUSE;
+                                to_worker_1 <: command_to_workers;
+                                to_worker_2 <: command_to_workers;
+                                to_worker_3 <: command_to_workers;
+                                to_worker_4 <: command_to_workers;
+                			} else if (button == BUTTON_D) {
+                				isPaused = 0;
+                                should_not_terminate = 0;
 
-			}
-		} else if (button == BUTTON_C) {
-			print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-			to_button_listener <: CONTINUE;
-		} else if (button == BUTTON_D) {
-			terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-			should_not_terminate = 0;
-		} else {
-			// If no buttons are pressed continue listening for buttons
-			to_button_listener <: CONTINUE;
+                				terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
+                                // We should terminate and so we're not waiting to receive from workers any longer
+                                received_worker_1 = 1;
+                                received_worker_2 = 1;
+                                received_worker_3 = 1;
+                                received_worker_4 = 1;
+                			}
+                		}
 
-            uchar command = (uchar)CONTINUE;
-            to_worker_1 <: command;
-            to_worker_2 <: command;
-            to_worker_3 <: command;
-            to_worker_4 <: command;
+                	} else if (button == BUTTON_D) {
+                        terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+                        should_not_terminate = 0;
 
-            // Store the overlapping lines we send
-            uchar worker_1_lines[2][IMWD+2];
+                        // We should terminate and so we're not waiting to receive from workers any longer
+                        received_worker_1 = 1;
+                        received_worker_2 = 1;
+                        received_worker_3 = 1;
+                        received_worker_4 = 1;
+                    } else if (button == NO_BUTTON) {
+                            to_button_listener <: CONTINUE;
+                    }
+                    break;
+                case to_worker_1 :> command:
+                    // Store the overlapping lines we send
+                    for (int i=0; i < IMWD+2; ++i) {
+                        to_worker_1 :> worker_1_lines[0][i];
+                        to_worker_1 :> worker_1_lines[1][i];
+                    }
 
-            for (int i=0; i < IMWD+2; ++i) {
-                to_worker_1 :> worker_1_lines[0][i];
-                to_worker_1 :> worker_1_lines[1][i];
+                	received_worker_1 = 1;
+                    // Get alive cells count from worker after recieving lines
+                    to_worker_1 :> alive_cells_1;
+
+                    break;
+                case to_worker_2 :> command:
+
+                    for (int i=0; i < IMWD+2; ++i) {
+                        to_worker_2 :> worker_2_lines[0][i];
+                        to_worker_2 :> worker_2_lines[1][i];
+                    }
+
+                	received_worker_2 = 1;
+                    to_worker_2 :> alive_cells_2;
+                    break;
+                case to_worker_3 :> command:
+                    for (int i=0; i < IMWD+2; ++i) {
+                        to_worker_3 :> worker_3_lines[0][i];
+                        to_worker_3 :> worker_3_lines[1][i];
+                    }
+
+                	received_worker_3 = 1;
+                    to_worker_3 :> alive_cells_3;
+                    break;
+                case to_worker_4 :> command:
+                    for (int i=0; i < IMWD+2; ++i) {
+                        to_worker_4 :> worker_4_lines[0][i];
+                        to_worker_4 :> worker_4_lines[1][i];
+                    }
+
+                	received_worker_4 = 1;
+                    to_worker_4 :> alive_cells_4;
+                break;
             }
+		}
 
-
-            // Get alive cells count from worker after recieving lines
-            int alive_cells_1;
-            to_worker_1 :> alive_cells_1;
-
-
-            uchar worker_2_lines[2][IMWD+2];
-
-            for (int i=0; i < IMWD+2; ++i) {
-                to_worker_2 :> worker_2_lines[0][i];
-                to_worker_2 :> worker_2_lines[1][i];
-            }
-
-            int alive_cells_2;
-            to_worker_2 :> alive_cells_2;
-
-
-            uchar worker_3_lines[2][IMWD+2];
-
-            for (int i=0; i < IMWD+2; ++i) {
-                to_worker_3 :> worker_3_lines[0][i];
-                to_worker_3 :> worker_3_lines[1][i];
-            }
-
-            int alive_cells_3;
-            to_worker_3 :> alive_cells_3;
-
-
-            uchar worker_4_lines[2][IMWD+2];
-
-            for (int i=0; i < IMWD+2; ++i) {
-                to_worker_4 :> worker_4_lines[0][i];
-                to_worker_4 :> worker_4_lines[1][i];
-            }
-
-            int alive_cells_4;
-            to_worker_4 :> alive_cells_4;
-
+		if (should_not_terminate == 1) {
             // Send visualiser alive cells after each iteration
             to_visualiser <: (alive_cells_1 + alive_cells_2 + alive_cells_3 + alive_cells_4);
 
-
             // Start sending the lines back out to workers
             //
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i = 0; i < IMWD + 2; ++i) {
                 // Worker 1's top line is all blanks so he can just
                 // replace with blanks again
                 uchar val = 0;
@@ -279,17 +301,17 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
                 to_worker_1 <: worker_2_lines[0][i];
             }
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i = 0; i < IMWD + 2; ++i) {
                 to_worker_2 <: worker_1_lines[1][i];
                 to_worker_2 <: worker_3_lines[0][i];
             }
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i = 0; i < IMWD + 2; ++i) {
                 to_worker_3 <: worker_2_lines[1][i];
                 to_worker_3 <: worker_4_lines[0][i];
             }
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i = 0; i < IMWD + 2; ++i) {
                 uchar val = 0;
                 to_worker_4 <: worker_3_lines[1][i];
                 // Bottom row for 4 is blank as before so set those
@@ -299,8 +321,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
             ++iteration_count;
 		}
-	}
-
+    }
 }
 
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {

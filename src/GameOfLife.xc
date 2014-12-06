@@ -85,6 +85,7 @@ void buttonListener(in port b, chanend to_distributor) {
             // Check for termination command from distributor
             int terminate_command;
             to_distributor :> terminate_command;
+            printf("Terminate command: %d\n", terminate_command);
 
              if (terminate_command == TERMINATE) {
                 should_not_terminate = 0;
@@ -209,6 +210,7 @@ void applyRules(Cell *cell) {
             cell->is_alive = 255;
         }
     }
+    //printf("We've applied rules\n");
 }
 
 void worker(chanend to_distributor) {
@@ -224,72 +226,104 @@ void worker(chanend to_distributor) {
 	}
 
 	while (should_not_terminate) {
+		int isPaused = 0;
+		int command;
 
-		uchar command;
-		to_distributor :> command;
 
-		if (command == RETURN_DATA) {
-			for (int row = 1; row < 5; ++row) {
-				for (int column = 1; column < IMWD+1; ++column) {
-					to_distributor <: grid[row][column];
+        Cell cellGrid[4][IMWD];
+		for (int row = 1; row < 5; ++row) {
+			for (int column = 1; column < IMWD + 1; ++column) {
+				Cell *cell = &(cellGrid[row - 1][column - 1]); //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
+				cell->is_alive = grid[row][column];
+				cell->neighbours[0] = grid[row + 1][column - 1];
+				cell->neighbours[1] = grid[row + 1][column];
+				cell->neighbours[2] = grid[row + 1][column + 1];
+				cell->neighbours[3] = grid[row][column - 1];
+				cell->neighbours[4] = grid[row][column + 1];
+				cell->neighbours[5] = grid[row - 1][column - 1];
+				cell->neighbours[6] = grid[row - 1][column];
+				cell->neighbours[7] = grid[row - 1][column + 1];
+
+				select {
+					case to_distributor :> command:
+                        printf("Command from distributor: %d\n", command);
+                        if (command == RETURN_DATA) {
+                            for (int row = 1; row < 5; ++row) {
+                                for (int column = 1; column < IMWD+1; ++column) {
+                                    to_distributor <: grid[row][column];
+                                }
+                            }
+                        } else if (command == TERMINATE) {
+                            should_not_terminate = 0;
+                        } else if (command == PAUSE) {
+                            isPaused = 1;
+                            int command;
+
+                            while (isPaused == 1) {
+                                to_distributor :> command;
+                                printf("Command from distributor: %d\n", command);
+                                if (command == UNPAUSE) {
+                                    isPaused = 0;
+                                } else if (command == RETURN_DATA) {
+                                    for (int row = 1; row < 5; ++row) {
+                                        for (int column = 1; column < IMWD+1; ++column) {
+                                            to_distributor <: grid[row][column];
+                                        }
+                                    }
+                                    isPaused = 0;
+                                } else if (command == TERMINATE) {
+                                    isPaused = 0;
+                                    should_not_terminate = 0;
+                                }
+                            }
+                        }
+					break;
+					default:
+						//printf("Applying rules\n");
+                        applyRules(cell);
+					break;
 				}
+
 			}
-		} else if (command == TERMINATE) {
-			should_not_terminate = 0;
-		} else {
-
-			Cell cellGrid[4][IMWD];
-			for (int row = 1; row < 5; ++row) {
-				for (int column = 1; column < IMWD + 1; ++column) {
-					Cell *cell = &(cellGrid[row - 1][column - 1]); //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
-					cell->is_alive = grid[row][column];
-					cell->neighbours[0] = grid[row + 1][column - 1];
-					cell->neighbours[1] = grid[row + 1][column];
-					cell->neighbours[2] = grid[row + 1][column + 1];
-					cell->neighbours[3] = grid[row][column - 1];
-					cell->neighbours[4] = grid[row][column + 1];
-					cell->neighbours[5] = grid[row - 1][column - 1];
-					cell->neighbours[6] = grid[row - 1][column];
-					cell->neighbours[7] = grid[row - 1][column + 1];
-
-					applyRules(cell);
-
-				}
-			}
-
-			int alive_counter = 0;
-
-			for (int row=1; row < 5; ++row) {
-				for (int column=1; column < IMWD+1; ++column) {
-					// Take cell value and put back into grid
-					grid[row][column] = cellGrid[row-1][column-1].is_alive;
-
-					// Keep running count of alive cells encountered
-					if (cellGrid[row-1][column-1].is_alive == 255) {
-						++alive_counter;
-					}
-				}
-			}
-
-			// Send top and bottom lines back to distributor so
-			// they can be harvested
-			for (int i = 0; i < IMWD + 2; ++i) {
-				to_distributor <: grid[1][i];
-				to_distributor <: grid[4][i];
-			}
-
-			to_distributor <: alive_counter;
-
-			// Get our overlapping lines from the distributor
-			for (int i = 0; i < IMWD + 2; ++i) {
-				uchar val;
-				to_distributor :> val;
-				grid[0][i] = val;
-				to_distributor :> val;
-				grid[5][i] = val;
-			}
-
 		}
+
+		if (should_not_terminate == 1) {
+            int alive_counter = 0;
+
+            for (int row = 1; row < 5; ++row) {
+                for (int column = 1; column < IMWD + 1; ++column) {
+                    // Take cell value and put back into grid
+                    grid[row][column] = cellGrid[row - 1][column - 1].is_alive;
+
+                    // Keep running count of alive cells encountered
+                    if (cellGrid[row - 1][column - 1].is_alive == 255) {
+                        ++alive_counter;
+                    }
+                }
+            }
+
+            // Send top and bottom lines back to distributor so
+            // they can be harvested
+
+            // When we're ready to send data back send READ_TO_SEND signal
+            to_distributor <: READY_TO_SEND;
+
+            for (int i = 0; i < IMWD + 2; ++i) {
+                to_distributor <: grid[1][i];
+                to_distributor <: grid[4][i];
+            }
+
+            to_distributor <: alive_counter;
+
+            // Get our overlapping lines from the distributor
+            for (int i = 0; i < IMWD + 2; ++i) {
+                uchar val;
+                to_distributor :> val;
+                grid[0][i] = val;
+                to_distributor :> val;
+                grid[5][i] = val;
+            }
+        }
 	}
     printf("worker terminate\n");
 }
