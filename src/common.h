@@ -8,6 +8,12 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
+#define DEBUG 1
+
+#if !DEBUG
+#define printf(...);
+#endif
+
 typedef unsigned char uchar;
 #define IMHT 16
 #define IMWD 16

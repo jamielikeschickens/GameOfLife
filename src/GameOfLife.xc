@@ -29,15 +29,9 @@ out port cledR = PORT_CLOCKLED_SELR;
 char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
 char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
 
-
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 1
 #define SHOW_DATA_OUT 1
-
-typedef struct {
-	int is_alive;
-	uchar neighbours[8]; // Neighbours around the cell. Starts top left 0, by row.
-} Cell;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -183,39 +177,63 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 //
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void applyRules(Cell *cell) {
+int applyRules(int row, int column, uchar grid[(IMHT/4)+2][IMWD+2]) {
+	//uchar cell = grid[row][column];
+
     int aliveCellsCount = 0;
-    for (int i = 0; i<8; ++i) {
-        if (cell->neighbours[i] == 255) {
+        if (grid[row+1][column-1] == 255) {
+        	++aliveCellsCount;
+        }
+        if (grid[row+1][column] == 255) {
             aliveCellsCount++;
         }
-    }
+        if (grid[row+1][column+1] == 255) {
+            aliveCellsCount++;
+        }
+        if (grid[row][column-1] == 255) {
+            aliveCellsCount++;
+        }
+        if (grid[row][column+1] == 255) {
+            aliveCellsCount++;
+        }
+        if (grid[row-1][column-1] == 255) {
+            aliveCellsCount++;
+        }
+        if (grid[row-1][column] == 255) {
+            aliveCellsCount++;
+        }
+        if (grid[row-1][column+1] == 255) {
+            aliveCellsCount++;
+        }
 
     /*any live cell with fewer than two live neighbours dies
      *any live cell with two or three live neighbours is unaffected
      *any live cell with more than three live neighbours dies
     **/
-    if (cell->is_alive == 255) {
+    if (grid[row][column] == 255) {
         if (aliveCellsCount < 2 || aliveCellsCount > 3) {
-            cell->is_alive = 0;
+            return 0;
+        } else {
+        	return grid[row][column];
         }
     }
     /*any dead cell
      *with exactly three live neighbours becomes alive
     **/
     else {
-        if (aliveCellsCount == 3) {
-            cell->is_alive = 255;
+    	if (aliveCellsCount == 3) {
+            return 255;
+        } else {
+        	return grid[row][column];
         }
     }
-    //printf("We've applied rules\n");
 }
 
 void worker(chanend to_distributor) {
-    uchar grid[6][IMWD+2]; // Grid of 6x18 for buffer each side
+    uchar grid[(IMHT/4)+2][IMWD+2]; // Grid for buffer each side
     int should_not_terminate = 1;
 
-    for (int row = 0; row < 6; ++row) {
+    for (int row = 0; row < (IMHT/4)+2; ++row) {
 		for (int column = 0; column < IMWD + 2; ++column) {
 			uchar val;
 			to_distributor :> val;
@@ -228,21 +246,10 @@ void worker(chanend to_distributor) {
 		int command;
 
 
-        Cell cellGrid[4][IMWD];
-		for (int row = 1; row < 5; ++row) {
+        uchar new_grid[(IMHT/4)][IMWD];
+		for (int row = 1; row < (IMHT/4)+1; ++row) {
 			for (int column = 1; column < IMWD + 1; ++column) {
-				Cell *cell = &(cellGrid[row - 1][column - 1]); //we use [row-1][column-1] to get to (0,0) to find the neighbours of the pixel at (1,1)
-				cell->is_alive = grid[row][column];
-				cell->neighbours[0] = grid[row + 1][column - 1];
-				cell->neighbours[1] = grid[row + 1][column];
-				cell->neighbours[2] = grid[row + 1][column + 1];
-				cell->neighbours[3] = grid[row][column - 1];
-				cell->neighbours[4] = grid[row][column + 1];
-				cell->neighbours[5] = grid[row - 1][column - 1];
-				cell->neighbours[6] = grid[row - 1][column];
-				cell->neighbours[7] = grid[row - 1][column + 1];
-
-                applyRules(cell);
+                //new_grid[row-1][column-1] = applyRules(row, column, grid);
                 int command;
 
                 select {
@@ -259,7 +266,7 @@ void worker(chanend to_distributor) {
                 					is_paused = 0;
                 					should_not_terminate = 0;
                 				} if (command == RETURN_DATA) {
-                        			for (int row = 1; row < 5; ++ row) {
+                        			for (int row = 1; row < (IMHT/4)+1; ++ row) {
                         				for (int column = 1; column < IMWD + 1; ++column) {
                         					to_distributor <: grid[row][column];
                         				}
@@ -269,7 +276,7 @@ void worker(chanend to_distributor) {
                 		} else if (command == TERMINATE) {
                 			should_not_terminate = 0;
                 		} else if (command == RETURN_DATA) {
-                			for (int row = 1; row < 5; ++ row) {
+                			for (int row = 1; row < (IMHT/4)+1; ++ row) {
                 				for (int column = 1; column < IMWD + 1; ++column) {
                 					to_distributor <: grid[row][column];
                 				}
@@ -280,7 +287,7 @@ void worker(chanend to_distributor) {
                 		break;
                 }
 
-                if (row == 4 && column == IMWD && should_not_terminate == 1) {
+                if (row == (IMHT/4) && column == IMWD && should_not_terminate == 1) {
                 	// We've just applied our last rule
                 	to_distributor <: FINISH_PROCESSING;
                 	// Block until we recieve a message from distributor
@@ -294,13 +301,13 @@ void worker(chanend to_distributor) {
 		if (should_not_terminate == 1) {
             int alive_counter = 0;
 
-            for (int row = 1; row < 5; ++row) {
+            for (int row = 1; row < (IMHT/4)+1; ++row) {
                 for (int column = 1; column < IMWD + 1; ++column) {
                     // Take cell value and put back into grid
-                    grid[row][column] = cellGrid[row - 1][column - 1].is_alive;
+                    grid[row][column] = new_grid[row - 1][column - 1];
 
                     // Keep running count of alive cells encountered
-                    if (cellGrid[row - 1][column - 1].is_alive == 255) {
+                    if (new_grid[row - 1][column - 1] == 255) {
                         ++alive_counter;
                     }
                 }
@@ -312,7 +319,7 @@ void worker(chanend to_distributor) {
 
             for (int i = 0; i < IMWD + 2; ++i) {
                 to_distributor <: grid[1][i];
-                to_distributor <: grid[4][i];
+                to_distributor <: grid[(IMHT/4)][i];
             }
 
             to_distributor <: alive_counter;
@@ -323,7 +330,7 @@ void worker(chanend to_distributor) {
                 to_distributor :> val;
                 grid[0][i] = val;
                 to_distributor :> val;
-                grid[5][i] = val;
+                grid[(IMHT/4)+1][i] = val;
             }
 		}
 	}
@@ -384,12 +391,12 @@ int main(void) {
 	{
 	    on stdcore[0]: buttonListener(buttons, to_distributor);
 	    on stdcore[1]: DataInStream(infname, c_inIO);
-	    on stdcore[2]: distributor(c_inIO, c_outIO, to_visualiser, worker_1, worker_2, worker_3, worker_4, to_distributor);
+	    on stdcore[0]: distributor(c_inIO, c_outIO, to_visualiser, worker_1, worker_2, worker_3, worker_4, to_distributor);
 	    on stdcore[0]: worker(worker_1);
 	    on stdcore[1]: worker(worker_2);
 	    on stdcore[2]: worker(worker_3);
 	    on stdcore[3]: worker(worker_4);
-	    on stdcore[1]: DataOutStream( outfname, c_outIO );
+	    on stdcore[3]: DataOutStream( outfname, c_outIO );
 
 	    on stdcore[0]: visualiser(to_visualiser, quadrant0, quadrant1, quadrant2, quadrant3);
 	    on stdcore[0]: showLED(cled0,quadrant0);

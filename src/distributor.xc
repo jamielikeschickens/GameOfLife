@@ -43,7 +43,7 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
     }
 
     // Send lines 1-5 to workers
-    for (int y = 1; y <= 5; ++y) {
+    for (int y = 1; y <= (IMHT/4)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
@@ -51,7 +51,7 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_1 <: val;
 
                 // If we're on lines 4 or 5 also send the padding to worker 2
-                if (y == 4 || y == 5) {
+                if (y == (IMHT/4) || y == (IMHT/4)+1) {
                     val = 0;
                     to_worker_2 <: val;
                 }
@@ -61,21 +61,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_1 <: val;
 
                 // If we're reading lines 4 or 5 we need to send them to worker 2 as well
-                if (y == 4 || y == 5) {
+                if (y == (IMHT/4) || y == (IMHT/4)+1) {
                     to_worker_2 <: val;
                 }
             }
         }
     }
 
-    for (int y = 6; y <= 9; ++y) {
+    for (int y = (IMHT/4)+2; y <= (IMHT/2)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_2 <: val;
 
-                if (y == 8 || y == 9) {
+                if (y == (IMHT/2) || y == (IMHT/2)+1) {
                     val = 0;
                     to_worker_3 <: val;
                 }
@@ -86,21 +86,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_2 <: val;
 
                 // If we're reading lines 8 or 9 we need to send them to worker 3 as well
-                if (y == 8 || y == 9) {
+                if (y == (IMHT/2) || y == (IMHT/2)+1) {
                     to_worker_3 <: val;
                 }
             }
         }
     }
 
-    for (int y = 10; y <= 13; ++y) {
+    for (int y = (IMHT/2)+2; y <= (3*IMHT/4)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_3 <: val;
 
-                if (y == 12 || y == 13) {
+                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
                     val = 0;
                     to_worker_4 <: val;
                 }
@@ -111,14 +111,14 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_3 <: val;
 
                 // If we're reading lines 12 or 13 we need to send them to worker 4 as well
-                if (y == 12 || y == 13) {
+                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
                     to_worker_4 <: val;
                 }
             }
         }
     }
 
-    for (int y = 14; y <= IMHT; ++y) {
+    for (int y = (3*IMHT/4)+2; y <= IMHT; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
@@ -143,25 +143,22 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 }
 
 void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
-	int command = TERMINATE;
-	to_worker_1 <: command;
-	to_worker_2 <: command;
-	to_worker_3 <: command;
-	to_worker_4 <: command;
-	c_out <: (uchar)command;
+	to_worker_1 <: TERMINATE;
+	to_worker_2 <: TERMINATE;
+	to_worker_3 <: TERMINATE;
+	to_worker_4 <: TERMINATE;
+	c_out <: (uchar)TERMINATE;
 	to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
 						 // however it never expects a negative number so we use this to signal terminate
-	int c = TERMINATE;
-	to_button_listener <: c;
+	to_button_listener <: TERMINATE;
 }
 
 void print_grid(chanend c_out, chanend to_button_listener, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
 	// Export game
-	int command = RETURN_DATA;
-	to_worker_1 <: command;
-	to_worker_2 <: command;
-	to_worker_3 <: command;
-	to_worker_4 <: command;
+	to_worker_1 <: RETURN_DATA;
+	to_worker_2 <: RETURN_DATA;
+	to_worker_3 <: RETURN_DATA;
+	to_worker_4 <: RETURN_DATA;
 
 	receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 }
@@ -172,25 +169,19 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
     int should_pause = 0;
 
 	while (should_not_terminate) {
-        uchar worker_1_lines[2][IMWD+2];
-        uchar worker_2_lines[2][IMWD+2];
-        uchar worker_3_lines[2][IMWD+2];
-        uchar worker_4_lines[2][IMWD+2];
+        uchar worker_lines[8][IMWD+2];
 
         int alive_cells_1;
         int alive_cells_2;
         int alive_cells_3;
         int alive_cells_4;
 
-        int worker_1_finished = 0;
-        int worker_2_finished = 0;
-        int worker_3_finished = 0;
-        int worker_4_finished = 0;
+        int workers_finished = 0;
 
 		int cmd;
 		int button;
 
-		while (worker_1_finished != 1 || worker_2_finished != 1 || worker_3_finished != 1 || worker_4_finished != 1) {
+		while (workers_finished != 4) {
             select {
                 case to_button_listener :> button:
                 	if (button == BUTTON_B) {
@@ -213,10 +204,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
                 		terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
                 		should_pause = 0;
                 		should_not_terminate = 0;
-                		worker_1_finished = 1;
-                		worker_2_finished = 1;
-                		worker_3_finished = 1;
-                		worker_4_finished = 1;
+                		workers_finished = 4;
                 	} else if (button == BUTTON_C) {
                 		to_button_listener <: CONTINUE;
                 		print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
@@ -225,16 +213,16 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
                 	}
                 break;
                 case to_worker_1 :> cmd:
-                	worker_1_finished = 1;
+                	++workers_finished;
                 break;
                 case to_worker_2 :> cmd:
-                	worker_2_finished = 1;
+                	++workers_finished;
                 break;
                 case to_worker_3 :> cmd:
-                	worker_3_finished = 1;
+                	++workers_finished;
                 break;
                 case to_worker_4 :> cmd:
-                	worker_4_finished = 1;
+                	++workers_finished;
                 break;
             }
 
@@ -248,8 +236,8 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
             // Store the overlapping lines we send
             for (int i=0; i < IMWD+2; ++i) {
-                to_worker_1 :> worker_1_lines[0][i];
-                to_worker_1 :> worker_1_lines[1][i];
+                to_worker_1 :> worker_lines[0][i];
+                to_worker_1 :> worker_lines[1][i];
             }
 
             // Get alive cells count from worker after recieving lines
@@ -257,22 +245,22 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
 
             for (int i=0; i < IMWD+2; ++i) {
-                to_worker_2 :> worker_2_lines[0][i];
-                to_worker_2 :> worker_2_lines[1][i];
+                to_worker_2 :> worker_lines[2][i];
+                to_worker_2 :> worker_lines[3][i];
             }
 
             to_worker_2 :> alive_cells_2;
 
             for (int i=0; i < IMWD+2; ++i) {
-                to_worker_3 :> worker_3_lines[0][i];
-                to_worker_3 :> worker_3_lines[1][i];
+                to_worker_3 :> worker_lines[4][i];
+                to_worker_3 :> worker_lines[5][i];
             }
 
             to_worker_3 :> alive_cells_3;
 
             for (int i=0; i < IMWD+2; ++i) {
-                to_worker_4 :> worker_4_lines[0][i];
-                to_worker_4 :> worker_4_lines[1][i];
+                to_worker_4 :> worker_lines[6][i];
+                to_worker_4 :> worker_lines[7][i];
             }
 
             to_worker_4 :> alive_cells_4;
@@ -287,22 +275,22 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
                 // replace with blanks again
                 uchar val = 0;
                 to_worker_1 <: val;
-                to_worker_1 <: worker_2_lines[0][i];
+                to_worker_1 <: worker_lines[2][i];
             }
 
             for (int i = 0; i < IMWD + 2; ++i) {
-                to_worker_2 <: worker_1_lines[1][i];
-                to_worker_2 <: worker_3_lines[0][i];
+                to_worker_2 <: worker_lines[1][i];
+                to_worker_2 <: worker_lines[4][i];
             }
 
             for (int i = 0; i < IMWD + 2; ++i) {
-                to_worker_3 <: worker_2_lines[1][i];
-                to_worker_3 <: worker_4_lines[0][i];
+                to_worker_3 <: worker_lines[3][i];
+                to_worker_3 <: worker_lines[6][i];
             }
 
             for (int i = 0; i < IMWD + 2; ++i) {
                 uchar val = 0;
-                to_worker_4 <: worker_3_lines[1][i];
+                to_worker_4 <: worker_lines[5][i];
                 // Bottom row for 4 is blank as before so set those
                 to_worker_4 <: val;
 
@@ -314,14 +302,14 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 }
 
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
-	for (int row=0; row < 4; ++row) {
+	for (int row=0; row < (IMHT/4); ++row) {
 		for (int column=0; column < IMWD; ++column) {
             uchar val;
             worker_1 :> val;
             c_out <: val;
 		}
 	}
-	for (int row=0; row < 4; ++row) {
+	for (int row=0; row < (IMHT/4); ++row) {
 		for (int column=0; column < IMWD; ++column) {
             uchar val;
             worker_2 :> val;
@@ -329,14 +317,14 @@ void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend w
 		}
 	}
 
-	for (int row=0; row < 4; ++row) {
+	for (int row=0; row < (IMHT/4); ++row) {
 		for (int column=0; column < IMWD; ++column) {
             uchar val;
             worker_3 :> val;
             c_out <: val;
 		}
 	}
-	for (int row=0; row < 4; ++row) {
+	for (int row=0; row < (IMHT/4); ++row) {
 		for (int column=0; column < IMWD; ++column) {
             uchar val;
             worker_4 :> val;
