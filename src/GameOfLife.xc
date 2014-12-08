@@ -73,16 +73,18 @@ void buttonListener(in port b, chanend to_distributor) {
         b :> r; // check if some buttons are pressed
         // Button debouncing
         if (prevButton == NO_BUTTON) {
-            to_distributor <: r; // send button pattern to userAnt
+        	if (r != NO_BUTTON) {
+        		to_distributor <: r; // send button pattern to userAnt
 
-            // Check for termination command from distributor
-            int terminate_command;
-            to_distributor :> terminate_command;
+        		// Check for termination command from distributor
+        		int terminate_command;
+        		to_distributor :> terminate_command;
+        		//printf("We get our continue command\n");
 
-             if (terminate_command == TERMINATE) {
-                should_not_terminate = 0;
-            }
-
+        		if (terminate_command == TERMINATE) {
+        			should_not_terminate = 0;
+        		}
+        	}
         }
         prevButton = r;
     }
@@ -180,7 +182,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 int applyRules(int row, int column, uchar grid[(IMHT/4)+2][IMWD+2]) {
 	//uchar cell = grid[row][column];
 
-    int aliveCellsCount = 0;
+        int aliveCellsCount = 0;
         if (grid[row+1][column-1] == 255) {
         	++aliveCellsCount;
         }
@@ -241,97 +243,77 @@ void worker(chanend to_distributor) {
 		}
 	}
 
+
 	while (should_not_terminate) {
 		int is_paused = 0;
 		int command;
 
 
         uchar new_grid[(IMHT/4)][IMWD];
-		for (int row = 1; row < (IMHT/4)+1; ++row) {
+		for (int row = 1; row < 5; ++row) {
 			for (int column = 1; column < IMWD + 1; ++column) {
-                //new_grid[row-1][column-1] = applyRules(row, column, grid);
-                int command;
+                new_grid[row-1][column-1] = applyRules(row, column, grid);
 
-                select {
-                	case to_distributor :> command:
-                		if (command == PAUSE) {
-                			is_paused = 1;
-							printf("Paused\n");
-                			while (is_paused) {
-                				to_distributor :> command;
-                				if (command == UNPAUSE) {
-                					printf("Unpaused\n");
-                					is_paused = 0;
-                				} if (command == TERMINATE) {
-                					is_paused = 0;
-                					should_not_terminate = 0;
-                				} if (command == RETURN_DATA) {
-                        			for (int row = 1; row < (IMHT/4)+1; ++ row) {
-                        				for (int column = 1; column < IMWD + 1; ++column) {
-                        					to_distributor <: grid[row][column];
-                        				}
-                        			}
-                				}
-                			}
-                		} else if (command == TERMINATE) {
-                			should_not_terminate = 0;
-                		} else if (command == RETURN_DATA) {
-                			for (int row = 1; row < (IMHT/4)+1; ++ row) {
-                				for (int column = 1; column < IMWD + 1; ++column) {
-                					to_distributor <: grid[row][column];
-                				}
-                			}
-                		}
-                	break;
-                	default:
-                		break;
+                if (should_not_terminate == 1) {
+                	to_distributor <: PAUSE;
+                	to_distributor :> command;
+                }
+                if (command == PAUSE) {
+                	int p = 1;
+                	while (p == 1) {
+                		printf("Paused\n");
+                        to_distributor <: PAUSE;
+                        to_distributor :> command;
+                        if (command == CONTINUE) {
+                        	p = 0;
+                        }
+                	}
+                } else if (command == TERMINATE) {
+                	should_not_terminate = 0;
                 }
 
-                if (row == (IMHT/4) && column == IMWD && should_not_terminate == 1) {
-                	// We've just applied our last rule
-                	to_distributor <: FINISH_PROCESSING;
-                	// Block until we recieve a message from distributor
-                	int c;
-                	to_distributor :> c;
-                }
-
+                //printf("no longer paused\n");
 			}
 		}
 
 		if (should_not_terminate == 1) {
-            int alive_counter = 0;
 
-            for (int row = 1; row < (IMHT/4)+1; ++row) {
-                for (int column = 1; column < IMWD + 1; ++column) {
-                    // Take cell value and put back into grid
-                    grid[row][column] = new_grid[row - 1][column - 1];
+			to_distributor <: FINISH_PROCESSING;
+			to_distributor :> command; // Block until told to continue
 
-                    // Keep running count of alive cells encountered
-                    if (new_grid[row - 1][column - 1] == 255) {
-                        ++alive_counter;
-                    }
-                }
-            }
+			int alive_counter = 0;
 
-            // Send top and bottom lines back to distributor so
-            // they can be harvested
+			for (int row = 1; row < (IMHT/4)+1; ++row) {
+				for (int column = 1; column < IMWD + 1; ++column) {
+					// Take cell value and put back into grid
+					grid[row][column] = new_grid[row - 1][column - 1];
+
+					// Keep running count of alive cells encountered
+					if (new_grid[row - 1][column - 1] == 255) {
+						++alive_counter;
+					}
+				}
+			}
+
+			// Send top and bottom lines back to distributor so
+			// they can be harvested
 
 
-            for (int i = 0; i < IMWD + 2; ++i) {
-                to_distributor <: grid[1][i];
-                to_distributor <: grid[(IMHT/4)][i];
-            }
+			for (int i = 0; i < IMWD + 2; ++i) {
+				to_distributor <: grid[1][i];
+				to_distributor <: grid[(IMHT/4)][i];
+			}
 
-            to_distributor <: alive_counter;
+			to_distributor <: alive_counter;
 
-            // Get our overlapping lines from the distributor
-            for (int i = 0; i < IMWD + 2; ++i) {
-                uchar val;
-                to_distributor :> val;
-                grid[0][i] = val;
-                to_distributor :> val;
-                grid[(IMHT/4)+1][i] = val;
-            }
+			// Get our overlapping lines from the distributor
+			for (int i = 0; i < IMWD + 2; ++i) {
+				uchar val;
+				to_distributor :> val;
+				grid[0][i] = val;
+				to_distributor :> val;
+				grid[(IMHT/4)+1][i] = val;
+			}
 		}
 	}
     printf("worker terminate\n");

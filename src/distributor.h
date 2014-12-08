@@ -13,9 +13,9 @@
 #define PAUSE 30
 #define TERMINATE 40
 #define FINISH_PROCESSING 50
-#define UNPAUSE 60
 
 
 void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener);
+
 
 #endif /* DISTRIBUTOR_H_ */

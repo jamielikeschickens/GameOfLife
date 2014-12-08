@@ -43,7 +43,7 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
     }
 
     // Send lines 1-5 to workers
-    for (int y = 1; y <= (IMHT/4)+1; ++y) {
+    for (int y = 1; y <= 5; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
@@ -61,21 +61,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_1 <: val;
 
                 // If we're reading lines 4 or 5 we need to send them to worker 2 as well
-                if (y == (IMHT/4) || y == (IMHT/4)+1) {
+                if (y == 4 || y == 5) {
                     to_worker_2 <: val;
                 }
             }
         }
     }
 
-    for (int y = (IMHT/4)+2; y <= (IMHT/2)+1; ++y) {
+    for (int y = 6; y <= 9; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_2 <: val;
 
-                if (y == (IMHT/2) || y == (IMHT/2)+1) {
+                if (y == 8 || y == 9) {
                     val = 0;
                     to_worker_3 <: val;
                 }
@@ -86,21 +86,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_2 <: val;
 
                 // If we're reading lines 8 or 9 we need to send them to worker 3 as well
-                if (y == (IMHT/2) || y == (IMHT/2)+1) {
+                if (y == 8 || y == 9) {
                     to_worker_3 <: val;
                 }
             }
         }
     }
 
-    for (int y = (IMHT/2)+2; y <= (3*IMHT/4)+1; ++y) {
+    for (int y = 10; y <= 13; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_3 <: val;
 
-                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
+                if (y == 12 || y == 13) {
                     val = 0;
                     to_worker_4 <: val;
                 }
@@ -111,14 +111,14 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_3 <: val;
 
                 // If we're reading lines 12 or 13 we need to send them to worker 4 as well
-                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
+                if (y == 12 || y == 13) {
                     to_worker_4 <: val;
                 }
             }
         }
     }
 
-    for (int y = (3*IMHT/4)+2; y <= IMHT; ++y) {
+    for (int y = 14; y <= IMHT; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
@@ -142,31 +142,37 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 
 }
 
-void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
-	to_worker_1 <: TERMINATE;
-	to_worker_2 <: TERMINATE;
-	to_worker_3 <: TERMINATE;
-	to_worker_4 <: TERMINATE;
+void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+	// Wait for the next pause question then tell it to terminate
+	int c;
+	worker_1 :> c;
+	worker_2 :> c;
+	worker_3 :> c;
+	worker_4 :> c;
+
+	worker_1 <: TERMINATE;
+	worker_2 <: TERMINATE;
+	worker_3 <: TERMINATE;
+	worker_4 <: TERMINATE;
 	c_out <: (uchar)TERMINATE;
 	to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
 						 // however it never expects a negative number so we use this to signal terminate
 	to_button_listener <: TERMINATE;
 }
 
-void print_grid(chanend c_out, chanend to_button_listener, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void print_grid(chanend c_out, chanend to_button_listener, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
 	// Export game
-	to_worker_1 <: RETURN_DATA;
-	to_worker_2 <: RETURN_DATA;
-	to_worker_3 <: RETURN_DATA;
-	to_worker_4 <: RETURN_DATA;
+	worker_1 <: RETURN_DATA;
+	worker_2 <: RETURN_DATA;
+	worker_3 <: RETURN_DATA;
+	worker_4 <: RETURN_DATA;
 
-	receiveAllData(c_out, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+	receiveAllData(c_out, worker_1, worker_2, worker_3, worker_4);
 }
 
 void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
 	unsigned int iteration_count = 0;
 	int should_not_terminate = 1;
-    int should_pause = 0;
 
 	while (should_not_terminate) {
         uchar worker_lines[8][IMWD+2];
@@ -180,55 +186,76 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
 		int cmd;
 		int button;
+		int is_paused = 0;
 
 		while (workers_finished != 4) {
-            select {
-                case to_button_listener :> button:
-                	if (button == BUTTON_B) {
-                        to_button_listener <: CONTINUE;
-                		if (should_pause) {
-                			should_pause = 0;
-                			to_worker_1 <: UNPAUSE;
-                			to_worker_2 <: UNPAUSE;
-                			to_worker_3 <: UNPAUSE;
-                			to_worker_4 <: UNPAUSE;
-                		} else {
-                			should_pause = 1;
-                			to_worker_1 <: PAUSE;
-                			to_worker_2 <: PAUSE;
-                			to_worker_3 <: PAUSE;
-                			to_worker_4 <: PAUSE;
-                			to_visualiser <: (int)floor(log(iteration_count));
-                		}
-                	} else if (button == BUTTON_D) {
-                		terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-                		should_pause = 0;
-                		should_not_terminate = 0;
-                		workers_finished = 4;
-                	} else if (button == BUTTON_C) {
-                		to_button_listener <: CONTINUE;
-                		print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
-                	} else if (button == NO_BUTTON) {
-                		to_button_listener <: CONTINUE;
-                	}
-                break;
-                case to_worker_1 :> cmd:
-                	++workers_finished;
-                break;
-                case to_worker_2 :> cmd:
-                	++workers_finished;
-                break;
-                case to_worker_3 :> cmd:
-                	++workers_finished;
-                break;
-                case to_worker_4 :> cmd:
-                	++workers_finished;
-                break;
-            }
-
+			select {
+				case to_button_listener :> button:
+					if (button == BUTTON_B) {
+						to_button_listener <: CONTINUE;
+						printf("Button B pressed");
+						if (is_paused == 0) {
+							is_paused = 1;
+							to_visualiser <: (int)floor(log(iteration_count)); // Display log of iteration count
+						} else {
+							is_paused = 0;
+						}
+					} else if (button == BUTTON_D) {
+						terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+						workers_finished = 4;
+						should_not_terminate = 0;
+					}
+                    break;
+				case to_worker_1 :> cmd:
+					if (cmd == PAUSE) {
+						if (is_paused == 1) {
+							to_worker_1 <: PAUSE;
+						} else {
+							to_worker_1 <: CONTINUE;
+						}
+						//printf("Still getting asked if we should pause\n");
+					} else if (cmd == FINISH_PROCESSING) {
+						++workers_finished;
+					}
+				break;
+				case to_worker_2 :> cmd:
+					if (cmd == PAUSE) {
+						if (is_paused == 1) {
+							to_worker_2 <: PAUSE;
+						} else {
+							to_worker_2 <: CONTINUE;
+						}
+					} else if (cmd == FINISH_PROCESSING) {
+						++workers_finished;
+					}
+				break;
+				case to_worker_3 :> cmd:
+					if (cmd == PAUSE) {
+						if (is_paused == 1) {
+							to_worker_3 <: PAUSE;
+						} else {
+							to_worker_3 <: CONTINUE;
+						}
+					} else if (cmd == FINISH_PROCESSING) {
+						++workers_finished;
+					}
+				break;
+				case to_worker_4 :> cmd:
+					if (cmd == PAUSE) {
+						if (is_paused == 1) {
+							to_worker_4 <: PAUSE;
+						} else {
+							to_worker_4 <: CONTINUE;
+						}
+					} else if (cmd == FINISH_PROCESSING) {
+						++workers_finished;
+					}
+				break;
+			}
 		}
 
 		if (should_not_terminate == 1) {
+            workers_finished = 0;
             to_worker_1 <: CONTINUE;
             to_worker_2 <: CONTINUE;
             to_worker_3 <: CONTINUE;
