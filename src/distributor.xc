@@ -43,7 +43,7 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
     }
 
     // Send lines 1-5 to workers
-    for (int y = 1; y <= 5; ++y) {
+    for (int y = 1; y <= (IMHT/4)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
@@ -61,21 +61,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_1 <: val;
 
                 // If we're reading lines 4 or 5 we need to send them to worker 2 as well
-                if (y == 4 || y == 5) {
+                if (y == (IMHT/4) || y == (IMHT/4)+1) {
                     to_worker_2 <: val;
                 }
             }
         }
     }
 
-    for (int y = 6; y <= 9; ++y) {
+    for (int y = (IMHT/4)+2; y <= (IMHT/2)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_2 <: val;
 
-                if (y == 8 || y == 9) {
+                if (y == (IMHT/2) || y == (IMHT/2)+1) {
                     val = 0;
                     to_worker_3 <: val;
                 }
@@ -86,21 +86,21 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_2 <: val;
 
                 // If we're reading lines 8 or 9 we need to send them to worker 3 as well
-                if (y == 8 || y == 9) {
+                if (y == (IMHT/2) || y == (IMHT/2)+1) {
                     to_worker_3 <: val;
                 }
             }
         }
     }
 
-    for (int y = 10; y <= 13; ++y) {
+    for (int y = (IMHT/2)+2; y <= (3*IMHT/4)+1; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell
                 val = 0;
                 to_worker_3 <: val;
 
-                if (y == 12 || y == 13) {
+                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
                     val = 0;
                     to_worker_4 <: val;
                 }
@@ -111,14 +111,14 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
                 to_worker_3 <: val;
 
                 // If we're reading lines 12 or 13 we need to send them to worker 4 as well
-                if (y == 12 || y == 13) {
+                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
                     to_worker_4 <: val;
                 }
             }
         }
     }
 
-    for (int y = 14; y <= IMHT; ++y) {
+    for (int y = (3*IMHT/4)+2; y <= IMHT; ++y) {
         for (int x = 0; x < IMWD + 2; ++x) {
             if (x == 0 || x == IMWD + 1) {
                 // If we are at the sides send a padding cell

@@ -250,7 +250,7 @@ void worker(chanend to_distributor) {
 
 
         uchar new_grid[(IMHT/4)][IMWD];
-		for (int row = 1; row < 5; ++row) {
+		for (int row = 1; row < (IMHT/4)+1; ++row) {
 			for (int column = 1; column < IMWD + 1; ++column) {
                 new_grid[row-1][column-1] = applyRules(row, column, grid);
 
