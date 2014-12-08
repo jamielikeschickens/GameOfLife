@@ -11,7 +11,7 @@
 #define RETURN_DATA 10
 #define CONTINUE 20
 #define PAUSE 30
-#define TERMINATE 40
+#define TERMINATE 5 // Must be higher than 112 for LED visualiser not to terminate
 #define FINISH_PROCESSING 50
 
 

@@ -26,11 +26,11 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test256.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout256.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
-#define SHOW_DATA_IN 1
+#define SHOW_DATA_IN 0
 #define SHOW_DATA_OUT 1
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -47,9 +47,13 @@ void DataInStream(char infname[], chanend c_out) {
 		printf("DataInStream:Error openening %s\n.", infname);
 		return;
 	}
+	int count = 0;
 	for (int y = 0; y < IMHT; y++) {
 		_readinline(line, IMWD);
 		for (int x = 0; x < IMWD; x++) {
+			if (line[x] == 255) {
+				++count;
+			}
 			c_out <: line[x];
 #if SHOW_DATA_IN
 			printf("-%4.1d ", line[x]); //uncomment to show image values
@@ -59,6 +63,7 @@ void DataInStream(char infname[], chanend c_out) {
 		printf("\n"); //uncomment to show image values
 #endif
 	}
+	printf("count: %d", count);
 	_closeinpgm();
 	printf("DataInStream:Done...\n");
 	return;
@@ -110,17 +115,18 @@ int showLED(out port p, chanend fromVisualiser) {
 
 void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadrant1, chanend toQuadrant2, chanend toQuadrant3) {
 	cledG <: 1;
-	int num;
+	unsigned int num;
 	int should_not_terminate = 1;
 
 	while (should_not_terminate) {
         from_distributor :> num;
 
         if (num == -1) {
+        	printf("Enters visualiser shutdown\n");
         	// If we recieve -1 shut down LEDs and visualiser
         	should_not_terminate = 0;
 
-        	int command = TERMINATE;
+        	unsigned int command = TERMINATE;
         	toQuadrant0 <: command;
         	toQuadrant1 <: command;
         	toQuadrant2 <: command;
@@ -132,7 +138,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
             // Probably a much more efficient way to do this
 
             // 0b0000 0111
-            int old = num;
+            unsigned int old = num;
 
             // Clear bit
             num = (old & ~0x4);
@@ -141,7 +147,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 
             num = (num & ~0x1);
             num = (num | ((old & 0x4) >> 2));
-            toQuadrant3 <: (num << 4);
+            toQuadrant3 <: (num << 4) & 0x70;
 
             // 0b0011 1000
             num = (old & ~0x20);
@@ -149,8 +155,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 
             num = (num & ~0x8);
             num = (num | ((old & 0x20) >> 2));
-            toQuadrant2 <: (num << 1);
-
+            toQuadrant2 <: (num << 1) & 0x70;
 
             // 0b1 1100 0000
             num = (old & ~0x100);
@@ -158,7 +163,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 
             num = (num & ~0x40);
             num = (num | ((old & 0x100) >> 2));
-            toQuadrant1 <: (num >> 2);
+            toQuadrant1 <: (num >> 2) & 0x70;
 
             // 0b1110 0000 0000
             num = (old & ~0x800);
@@ -167,7 +172,7 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
             num = (num & ~0x200);
             num = (num | ((old & 0x800) >> 2));
 
-            toQuadrant0 <: (num >> 5);
+            toQuadrant0 <: (num >> 5) & 0x70;
         }
 	}
 	printf("Visualiser terminate\n");
@@ -308,6 +313,7 @@ void worker(chanend to_distributor) {
 					}
 				}
 			}
+			//printf("worker alive cells: %d\n", alive_counter);
 
 			// Send top and bottom lines back to distributor so
 			// they can be harvested
