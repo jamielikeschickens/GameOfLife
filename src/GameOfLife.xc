@@ -266,12 +266,26 @@ void worker(chanend to_distributor) {
                         to_distributor :> command;
                         if (command == CONTINUE) {
                         	p = 0;
+                        } else if (command == TERMINATE) {
+                        	should_not_terminate = 0;
+                        	p = 0;
+                        } else if (command == RETURN_DATA) {
+                        	for (int row=1; row < (IMHT/4)+1; ++row) {
+                        		for (int column=1; column < (IMWD+1); ++column) {
+                        			to_distributor <: grid[row][column];
+                        		}
+                        	}
                         }
                 	}
                 } else if (command == TERMINATE) {
                 	should_not_terminate = 0;
+                } else if (command == RETURN_DATA) {
+                	for (int row=1; row < (IMHT/4)+1; ++row) {
+                		for (int column=1; column < (IMWD+1); ++column) {
+                			to_distributor <: grid[row][column];
+                		}
+                	}
                 }
-
                 //printf("no longer paused\n");
 			}
 		}

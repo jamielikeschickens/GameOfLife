@@ -161,6 +161,13 @@ void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visuali
 }
 
 void print_grid(chanend c_out, chanend to_button_listener, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+	// Wait for the next pause question then tell it to terminate
+	int c;
+	worker_1 :> c;
+	worker_2 :> c;
+	worker_3 :> c;
+	worker_4 :> c;
+
 	// Export game
 	worker_1 <: RETURN_DATA;
 	worker_2 <: RETURN_DATA;
@@ -200,6 +207,9 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 						} else {
 							is_paused = 0;
 						}
+					} else if (button == BUTTON_C) {
+						to_button_listener <: CONTINUE;
+						print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 					} else if (button == BUTTON_D) {
 						terminate_all(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 						workers_finished = 4;
