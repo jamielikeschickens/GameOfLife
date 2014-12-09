@@ -27,8 +27,8 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test64.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout64.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test16.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout16.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 0
@@ -362,6 +362,19 @@ uint8_t applyRules(int row, int column, uchar grid[(IMHT/4)+2][IMWD/8]) {
 	return new_group_byte;
 }
 
+// Hamming weight is amount of 1's in a binary number, faster ways to do this (lookup tables etc)
+// but this will do for now
+int hamming_weight(uint8_t num) {
+	int count = 0;
+	for (int i=0; i < 8; ++i) {
+		int x = (num & (1 << (7-i))) >> (7-i);
+		if (x == 1) {
+			++count;
+		}
+	}
+	return count;
+}
+
 void worker(chanend to_distributor) {
     uchar grid[(IMHT/4)+2][IMWD/8]; // Divide by 8 for group bytes of cells
     int should_not_terminate = 1;
@@ -434,10 +447,8 @@ void worker(chanend to_distributor) {
 					grid[row][column] = new_grid[row-1][column];
 
 					// Keep running count of alive cells encountered
-					// TODO: Go through each 8 byte group to figure out how many are alive
-					/*if (new_grid[row-1][column-1] == 255) {
-						++alive_counter;
-					}*/
+					int group_weight = hamming_weight(grid[row][column]);
+					alive_counter += group_weight;
 				}
 			}
 			//printf("worker alive cells: %d\n", alive_counter);
