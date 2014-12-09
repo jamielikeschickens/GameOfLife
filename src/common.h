@@ -15,8 +15,8 @@
 #endif
 
 typedef unsigned char uchar;
-#define IMHT 256
-#define IMWD 256
+#define IMHT 64
+#define IMWD 64
 
 #define BUTTON_A 14
 #define BUTTON_B 13

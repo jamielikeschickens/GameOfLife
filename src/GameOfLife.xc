@@ -14,6 +14,7 @@
 
 #include <platform.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "common.h"
 #include "pgmIO.h"
 #include "distributor.h"
@@ -26,8 +27,8 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test256.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout256.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test64.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout64.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 0
@@ -47,23 +48,30 @@ void DataInStream(char infname[], chanend c_out) {
 		printf("DataInStream:Error openening %s\n.", infname);
 		return;
 	}
-	int count = 0;
 	for (int y = 0; y < IMHT; y++) {
 		_readinline(line, IMWD);
-		for (int x = 0; x < IMWD; x++) {
-			if (line[x] == 255) {
-				++count;
-			}
-			c_out <: line[x];
+		uint8_t group_byte = 0;
+		// Packs 8 bytes from data in into 8 bit integer from line and sends to distributor
+		for (int x = 0; x < IMWD; x+=8) {
+			for (int i=0; i < 8; ++i) {
 #if SHOW_DATA_IN
-			printf("-%4.1d ", line[x]); //uncomment to show image values
+                	printf("-%4.1d ", line[x+i]); //uncomment to show image values
 #endif
+
+                if (line[x + i] == 255) {
+
+
+                    group_byte = group_byte | (1 << (7-i));
+
+                }
+			}
+			c_out <: group_byte;
+			group_byte = 0; // Clear the group byte for next 8 bits read
 		}
 #if SHOW_DATA_IN
 		printf("\n"); //uncomment to show image values
 #endif
 	}
-	printf("count: %d", count);
 	_closeinpgm();
 	printf("DataInStream:Done...\n");
 	return;
@@ -76,6 +84,7 @@ void buttonListener(in port b, chanend to_distributor) {
 
     while (should_not_terminate) {
         b :> r; // check if some buttons are pressed
+        //printf("Got some buttons\n");
         // Button debouncing
         if (prevButton == NO_BUTTON) {
         	if (r != NO_BUTTON) {
@@ -184,65 +193,182 @@ void visualiser(chanend from_distributor, chanend toQuadrant0, chanend toQuadran
 //
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int applyRules(int row, int column, uchar grid[(IMHT/4)+2][IMWD+2]) {
-	//uchar cell = grid[row][column];
+uint8_t applyRules(int row, int column, uchar grid[(IMHT/4)+2][IMWD/8]) {
+	uint8_t group_byte = grid[row][column];
+	uint8_t new_group_byte = 0;
+	uint8_t alive_neighbours = 0;
+	uint8_t top_byte;
+	uint8_t bottom_byte;
 
-        int aliveCellsCount = 0;
-        if (grid[row+1][column-1] == 255) {
-        	++aliveCellsCount;
-        }
-        if (grid[row+1][column] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row+1][column+1] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row][column-1] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row][column+1] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row-1][column-1] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row-1][column] == 255) {
-            aliveCellsCount++;
-        }
-        if (grid[row-1][column+1] == 255) {
-            aliveCellsCount++;
-        }
+	if (row > 0) {
+		top_byte = grid[row-1][column];
+	}
+	if (row < IMHT) {
+		bottom_byte = grid[row+1][column];
+	}
 
-    /*any live cell with fewer than two live neighbours dies
-     *any live cell with two or three live neighbours is unaffected
-     *any live cell with more than three live neighbours dies
-    **/
-    if (grid[row][column] == 255) {
-        if (aliveCellsCount < 2 || aliveCellsCount > 3) {
-            return 0;
-        } else {
-        	return grid[row][column];
-        }
-    }
-    /*any dead cell
-     *with exactly three live neighbours becomes alive
-    **/
-    else {
-    	if (aliveCellsCount == 3) {
-            return 255;
-        } else {
-        	return grid[row][column];
-        }
-    }
+	// Start counting 0 - 8 bits numbered left to right
+	for (int i=0; i < 8; ++i) {
+		// Clear alive neighbours for each iteration
+		alive_neighbours = 0;
+
+		// Clear everything but bit we're looking at
+		uint8_t b = group_byte & (1 << (7-i));
+		uint8_t is_alive = b >> (7-i);
+
+		// Find neighbours
+		// Top left neighbour
+		uint8_t tl_is_alive;
+		// Furthest left group byte furthest left bit
+		if (column == 0 && i == 0) {
+			// Top left is padding so return 0
+			tl_is_alive = 0;
+		} else if (i == 0) {
+			// Furthest left bit, need previous group byte (furthest right bit)
+			uint8_t prev_top_byte = grid[row-1][column-1];
+			tl_is_alive = prev_top_byte & 0x1;
+		} else {
+			uint8_t tl = top_byte & (1 << ((7-i)+1));
+			tl_is_alive = tl >> ((7-i)+1);
+		}
+
+		if (tl_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Top centre neighbour
+		uint8_t tc_is_alive;
+		uint8_t tc = top_byte & (1 << (7-i));
+		tc_is_alive = tc >> (7-i);
+		if (tc_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Top right neighbour
+		uint8_t tr_is_alive;
+		// Furthest right group byte furthest right bit
+		if (column == ((IMWD/8)-1) && i == 7) {
+			// Right left is padding so return 0
+			tr_is_alive = 0;
+		} else if (i == 7) {
+			// Furthest right bit, need next group byte (furthest left bit)
+			uint8_t next_top_byte = grid[row-1][column+1];
+			tr_is_alive = (next_top_byte & 0x80) >> 7;
+		} else {
+			uint8_t tr = top_byte & (1 << ((7-i)-1));
+			tr_is_alive = tr >> ((7-i)-1);
+		}
+		if (tr_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Centre left neighbour
+		uint8_t cl_is_alive;
+		// Furthest left group byte furthest left bit
+		if (column == 0 && i == 0) {
+			cl_is_alive = 0;
+		} else if (i == 0) {
+			// Furthest left bit, need previous group byte (furthest right bit)
+			uint8_t prev_centre_byte = grid[row][column - 1];
+			cl_is_alive = prev_centre_byte & 0x1;
+		} else {
+			uint8_t cl = group_byte & (1 << ((7 - i) + 1));
+			cl_is_alive = cl >> ((7 - i) + 1);
+		}
+
+		if (cl_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Centre right neighbour
+		uint8_t cr_is_alive;
+		// Furthest right group byte furthest right bit
+		if (column == ((IMWD/8)-1) && i == 7) {
+			cr_is_alive = 0;
+		} else if (i == 7) {
+			// Furthest right bit, need next group byte (furthest left bit)
+			uint8_t next_centre_byte = grid[row][column + 1];
+			cr_is_alive = (next_centre_byte & 0x80) >> 7;
+		} else {
+			uint8_t cr = group_byte & (1 << ((7 - i) - 1));
+			cr_is_alive = cr >> ((7 - i) - 1);
+		}
+
+		if (cr_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Bottom left neighbour
+		uint8_t bl_is_alive;
+		// Furthest left group byte furthest left bit
+		if (column == 0 && i == 0) {
+			// Bottom left is padding so return 0
+			bl_is_alive = 0;
+		} else if (i == 0) {
+			// Furthest left bit, need previous group byte (furthest right bit)
+			uint8_t prev_bottom_byte = grid[row+1][column-1];
+			bl_is_alive = prev_bottom_byte & 0x1;
+		} else {
+			uint8_t bl = bottom_byte & (1 << ((7-i)+1));
+			bl_is_alive = bl >> ((7-i)+1);
+		}
+
+		if (bl_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Bottom centre neighbour
+		uint8_t bc_is_alive;
+		uint8_t bc = bottom_byte & (1 << (7-i));
+		bc_is_alive = bc >> (7-i);
+		if (bc_is_alive) {
+			++alive_neighbours;
+		}
+
+		// Bottom right neighbour
+		uint8_t br_is_alive;
+		// Furthest right group byte furthest right bit
+		if (column == ((IMWD/8)-1) && i == 7) {
+			// Right left is padding so return 0
+			br_is_alive = 0;
+		} else if (i == 7) {
+			// Furthest right bit, need next group byte (furthest left bit)
+			uint8_t next_bottom_byte = grid[row+1][column+1];
+			br_is_alive = (next_bottom_byte & 0x80) >> 7;
+		} else {
+			uint8_t br = bottom_byte & (1 << ((7-i)-1));
+			br_is_alive = br >> ((7-i)-1);
+		}
+		if (br_is_alive) {
+			++alive_neighbours;
+		}
+
+		/*any live cell with fewer than two live neighbours dies
+		 *any live cell with two or three live neighbours is unaffected
+		 *any live cell with more than three live neighbours dies
+		 **/
+		uint8_t current_bit = group_byte & (1 << (7-i));
+		uint8_t current_cell_is_alive = current_bit >> (7-i);
+		if (current_cell_is_alive) {
+			if (alive_neighbours == 2 || alive_neighbours == 3) {
+				new_group_byte = new_group_byte | current_bit;
+			}
+		} else {
+			if (alive_neighbours == 3) {
+				new_group_byte = new_group_byte | (1 << (7-i));
+			}
+		}
+	}
+	return new_group_byte;
 }
 
 void worker(chanend to_distributor) {
-    uchar grid[(IMHT/4)+2][IMWD+2]; // Grid for buffer each side
+    uchar grid[(IMHT/4)+2][IMWD/8]; // Divide by 8 for group bytes of cells
     int should_not_terminate = 1;
 
     for (int row = 0; row < (IMHT/4)+2; ++row) {
-		for (int column = 0; column < IMWD + 2; ++column) {
-			uchar val;
+		for (int column = 0; column < (IMWD/8); ++column) {
+			uint8_t val;
 			to_distributor :> val;
 			grid[row][column] = val;
 		}
@@ -254,10 +380,10 @@ void worker(chanend to_distributor) {
 		int command;
 
 
-        uchar new_grid[(IMHT/4)][IMWD];
-		for (int row = 1; row < (IMHT/4)+1; ++row) {
-			for (int column = 1; column < IMWD + 1; ++column) {
-                new_grid[row-1][column-1] = applyRules(row, column, grid);
+        uchar new_grid[(IMHT/4)][IMWD/8];
+		for (int row = 1; row <= (IMHT/4); ++row) {
+			for (int column = 0; column < (IMWD/8); ++column) {
+                new_grid[row-1][column] = applyRules(row, column, grid);
 
                 if (should_not_terminate == 1) {
                 	to_distributor <: PAUSE;
@@ -276,7 +402,7 @@ void worker(chanend to_distributor) {
                         	p = 0;
                         } else if (command == RETURN_DATA) {
                         	for (int row=1; row < (IMHT/4)+1; ++row) {
-                        		for (int column=1; column < (IMWD+1); ++column) {
+                        		for (int column=0; column < (IMWD/8); ++column) {
                         			to_distributor <: grid[row][column];
                         		}
                         	}
@@ -286,7 +412,7 @@ void worker(chanend to_distributor) {
                 	should_not_terminate = 0;
                 } else if (command == RETURN_DATA) {
                 	for (int row=1; row < (IMHT/4)+1; ++row) {
-                		for (int column=1; column < (IMWD+1); ++column) {
+                		for (int column=0; column < (IMWD/8); ++column) {
                 			to_distributor <: grid[row][column];
                 		}
                 	}
@@ -303,14 +429,15 @@ void worker(chanend to_distributor) {
 			int alive_counter = 0;
 
 			for (int row = 1; row < (IMHT/4)+1; ++row) {
-				for (int column = 1; column < IMWD + 1; ++column) {
+				for (int column = 0; column < (IMWD/8); ++column) {
 					// Take cell value and put back into grid
-					grid[row][column] = new_grid[row - 1][column - 1];
+					grid[row][column] = new_grid[row-1][column];
 
 					// Keep running count of alive cells encountered
-					if (new_grid[row - 1][column - 1] == 255) {
+					// TODO: Go through each 8 byte group to figure out how many are alive
+					/*if (new_grid[row-1][column-1] == 255) {
 						++alive_counter;
-					}
+					}*/
 				}
 			}
 			//printf("worker alive cells: %d\n", alive_counter);
@@ -319,7 +446,8 @@ void worker(chanend to_distributor) {
 			// they can be harvested
 
 
-			for (int i = 0; i < IMWD + 2; ++i) {
+			for (int i = 0; i < IMWD/8; ++i) {
+
 				to_distributor <: grid[1][i];
 				to_distributor <: grid[(IMHT/4)][i];
 			}
@@ -327,8 +455,8 @@ void worker(chanend to_distributor) {
 			to_distributor <: alive_counter;
 
 			// Get our overlapping lines from the distributor
-			for (int i = 0; i < IMWD + 2; ++i) {
-				uchar val;
+			for (int i = 0; i < IMWD/8; ++i) {
+				uint8_t val;
 				to_distributor :> val;
 				grid[0][i] = val;
 				to_distributor :> val;
@@ -345,7 +473,6 @@ void worker(chanend to_distributor) {
 // /////////////////////////////////////////////////////////////////////////////////////////
 void DataOutStream(char outfname[], chanend c_in) {
 	int res;
-	int i = 0;
 	uchar line[IMWD];
 	printf("DataOutStream:Start...\n");
 	res = _openoutpgm(outfname, IMWD, IMHT);
@@ -355,29 +482,44 @@ void DataOutStream(char outfname[], chanend c_in) {
 	}
 	while (1) {
 		int count = 0;
-		for (int y = 0; y < IMHT; y++) {
-			for (int x = 0; x < IMWD; x++) {
-				uchar command;
-				c_in :> command;
-				if (command == TERMINATE) {
-					// Terminate by returning
-					_closeoutpgm();
-					return;
-				} else {
-					line[x] = command;
+		int command;
+		c_in :> command;
+
+		if (command == TERMINATE) {
+			// Terminate by returning
+			_closeoutpgm();
+			return;
+		} else {
+			printf("yo start printing\n");
+			for (int y = 0; y < IMHT; y++) {
+				for (int x = 0; x < IMWD/8; x++) {
+					uint8_t group_byte;
+					c_in :> group_byte;
+
+					// Unpacks 8 bytes from byte sent each bit is a byte
+					for (int i=0; i < 8; ++i) {
+						uint8_t current_bit = group_byte & (1 << (7-i));
+						//printf("%d\n", group_byte);
+						if ((current_bit >> (7-i)) == 1) {
+
+							line[(x*8) + i] = 255;
+						} else {
+							line[(x*8) + i] = 0;
+						}
+#if SHOW_DATA_OUT
+						printf("-%4.1d ", line[(x*8)+i]); //uncomment to show image values
+#endif
+					}
 				}
-	#if SHOW_DATA_OUT
-				printf("-%4.1d ", line[x]); //uncomment to show image values
-	#endif
-				++count;
+
+#if SHOW_DATA_OUT
+				printf("\n");
+				_writeoutline( line, IMWD );
+#endif
 			}
-	#if SHOW_DATA_OUT
-			printf("\n");
-	#endif
-			_writeoutline( line, IMWD );
+			++count;
 		}
-		++i;
-		printf( "DataOutStream%d:Done...\n", i);
+		printf( "DataOutStream%d:Done...\n", count);
 	}
 	return;
 }

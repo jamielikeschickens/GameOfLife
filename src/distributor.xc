@@ -7,9 +7,14 @@
 
 #include <platform.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <math.h>
 #include "common.h"
 #include "distributor.h"
+
+timer t;
+uint32_t start_time;
+uint32_t end_time;
 
 void harvest_results(chanend c_out, chanend button_listener, chanend to_visaliser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
 void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
@@ -27,6 +32,7 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
 		to_button_listener <: CONTINUE;
 	}
     processImage(c_out, c_in, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
+	t :> start_time;
     // Wait for workers to send back the overlapping lines so we can send them back out
     harvest_results(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
@@ -36,104 +42,62 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
 void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
     printf("ProcessImage:Start, size = %dx%d\n", IMHT, IMWD);
 
-    uchar val;
-    for (int x = 0; x < IMWD + 2; ++x) {
+    uint8_t val;
+    for (int x = 0; x < IMWD; x+=8) {
         val = 0;
         to_worker_1 <: val;
     }
 
     // Send lines 1-5 to workers
     for (int y = 1; y <= (IMHT/4)+1; ++y) {
-        for (int x = 0; x < IMWD + 2; ++x) {
-            if (x == 0 || x == IMWD + 1) {
-                // If we are at the sides send a padding cell
-                val = 0;
-                to_worker_1 <: val;
+        for (int x = 0; x < IMWD; x+=8) {
+            // Else send the actual data
+            c_in :> val;
+            to_worker_1 <: val;
 
-                // If we're on lines 4 or 5 also send the padding to worker 2
-                if (y == (IMHT/4) || y == (IMHT/4)+1) {
-                    val = 0;
-                    to_worker_2 <: val;
-                }
-            } else {
-                // Else send the actual data
-                c_in :> val;
-                to_worker_1 <: val;
-
-                // If we're reading lines 4 or 5 we need to send them to worker 2 as well
-                if (y == (IMHT/4) || y == (IMHT/4)+1) {
-                    to_worker_2 <: val;
-                }
+            // If we're reading lines 4 or 5 we need to send them to worker 2 as well
+            if (y == (IMHT/4) || y == (IMHT/4)+1) {
+                to_worker_2 <: val;
             }
         }
     }
 
     for (int y = (IMHT/4)+2; y <= (IMHT/2)+1; ++y) {
-        for (int x = 0; x < IMWD + 2; ++x) {
-            if (x == 0 || x == IMWD + 1) {
-                // If we are at the sides send a padding cell
-                val = 0;
-                to_worker_2 <: val;
+        for (int x = 0; x < IMWD; x+=8) {
+           // Else send the actual data
+            c_in :> val;
+            to_worker_2 <: val;
 
-                if (y == (IMHT/2) || y == (IMHT/2)+1) {
-                    val = 0;
-                    to_worker_3 <: val;
-                }
-
-            } else {
-                // Else send the actual data
-                c_in :> val;
-                to_worker_2 <: val;
-
-                // If we're reading lines 8 or 9 we need to send them to worker 3 as well
-                if (y == (IMHT/2) || y == (IMHT/2)+1) {
-                    to_worker_3 <: val;
-                }
+            // If we're reading lines 8 or 9 we need to send them to worker 3 as well
+            if (y == (IMHT/2) || y == (IMHT/2)+1) {
+                to_worker_3 <: val;
             }
         }
     }
 
     for (int y = (IMHT/2)+2; y <= (3*IMHT/4)+1; ++y) {
-        for (int x = 0; x < IMWD + 2; ++x) {
-            if (x == 0 || x == IMWD + 1) {
-                // If we are at the sides send a padding cell
-                val = 0;
-                to_worker_3 <: val;
+        for (int x = 0; x < IMWD; x+=8) {
+           // Else send the actual data
+            c_in :> val;
+            to_worker_3 <: val;
 
-                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
-                    val = 0;
-                    to_worker_4 <: val;
-                }
-
-            } else {
-                // Else send the actual data
-                c_in :> val;
-                to_worker_3 <: val;
-
-                // If we're reading lines 12 or 13 we need to send them to worker 4 as well
-                if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
-                    to_worker_4 <: val;
-                }
+            // If we're reading lines 12 or 13 we need to send them to worker 4 as well
+            if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
+                to_worker_4 <: val;
             }
         }
     }
 
     for (int y = (3*IMHT/4)+2; y <= IMHT; ++y) {
-        for (int x = 0; x < IMWD + 2; ++x) {
-            if (x == 0 || x == IMWD + 1) {
-                // If we are at the sides send a padding cell
-                val = 0;
-                to_worker_4 <: val;
-            } else {
-                // Else send the actual data
-                c_in :> val;
-                to_worker_4 <: val;
-            }
+        for (int x = 0; x < IMWD; x+=8) {
+           // Else send the actual data
+            c_in :> val;
+            to_worker_4 <: val;
         }
     }
 
     // Send last buffer bytes
-    for (int x = 0; x < IMWD + 2; ++x) {
+    for (int x = 0; x < IMWD; x+=8) {
         val = 0;
         to_worker_4 <: val;
     }
@@ -154,7 +118,7 @@ void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visuali
 	worker_2 <: TERMINATE;
 	worker_3 <: TERMINATE;
 	worker_4 <: TERMINATE;
-	c_out <: (uchar)TERMINATE;
+	c_out <: TERMINATE;
 	to_visualiser <: -1; // Send -1 as it expects integer that at some point may equal TERMINATE
 						 // however it never expects a negative number so we use this to signal terminate
 	to_button_listener <: TERMINATE;
@@ -182,7 +146,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 	int should_not_terminate = 1;
 
 	while (should_not_terminate) {
-        uchar worker_lines[8][IMWD+2];
+        uint8_t worker_lines[8][IMWD/8];
 
         int alive_cells_1;
         int alive_cells_2;
@@ -196,6 +160,9 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 		int is_paused = 0;
 
 		while (workers_finished != 4) {
+			// Give priority to button commands rather than recieving
+			// data from workers
+			[[ordered]]
 			select {
 				case to_button_listener :> button:
 					if (button == BUTTON_B) {
@@ -208,6 +175,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 							is_paused = 0;
 						}
 					} else if (button == BUTTON_C) {
+						printf("hello");
 						to_button_listener <: CONTINUE;
 						print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 					} else if (button == BUTTON_D) {
@@ -272,7 +240,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
             to_worker_4 <: CONTINUE;
 
             // Store the overlapping lines we send
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_1 :> worker_lines[0][i];
                 to_worker_1 :> worker_lines[1][i];
             }
@@ -281,21 +249,21 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
             to_worker_1 :> alive_cells_1;
 
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_2 :> worker_lines[2][i];
                 to_worker_2 :> worker_lines[3][i];
             }
 
             to_worker_2 :> alive_cells_2;
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_3 :> worker_lines[4][i];
                 to_worker_3 :> worker_lines[5][i];
             }
 
             to_worker_3 :> alive_cells_3;
 
-            for (int i=0; i < IMWD+2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_4 :> worker_lines[6][i];
                 to_worker_4 :> worker_lines[7][i];
             }
@@ -307,7 +275,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 
             // Start sending the lines back out to workers
             //
-            for (int i = 0; i < IMWD + 2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 // Worker 1's top line is all blanks so he can just
                 // replace with blanks again
                 uchar val = 0;
@@ -315,55 +283,63 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
                 to_worker_1 <: worker_lines[2][i];
             }
 
-            for (int i = 0; i < IMWD + 2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_2 <: worker_lines[1][i];
                 to_worker_2 <: worker_lines[4][i];
             }
 
-            for (int i = 0; i < IMWD + 2; ++i) {
+            for (int i=0; i < IMWD/8; ++i) {
                 to_worker_3 <: worker_lines[3][i];
                 to_worker_3 <: worker_lines[6][i];
             }
 
-            for (int i = 0; i < IMWD + 2; ++i) {
-                uchar val = 0;
+            for (int i=0; i < IMWD/8; ++i) {
+                uint8_t val = 0;
                 to_worker_4 <: worker_lines[5][i];
                 // Bottom row for 4 is blank as before so set those
                 to_worker_4 <: val;
 
             }
 			++iteration_count;
+			if (iteration_count == 100) {
+				t :> end_time;
+				float time_ms = (float)(end_time - start_time) / 100000.0;
+				printf("100 iterations in %fms\n", time_ms);
+				while (1) { }
+			}
 		}
 
     }
 }
 
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+	c_out <: RETURN_DATA;
+
 	for (int row=0; row < (IMHT/4); ++row) {
-		for (int column=0; column < IMWD; ++column) {
-            uchar val;
+		for (int column=0; column < IMWD/8; ++column) {
+            uint8_t val;
             worker_1 :> val;
             c_out <: val;
 		}
 	}
 	for (int row=0; row < (IMHT/4); ++row) {
-		for (int column=0; column < IMWD; ++column) {
-            uchar val;
+		for (int column=0; column < IMWD/8; ++column) {
+			uint8_t val;
             worker_2 :> val;
             c_out <: val;
 		}
 	}
 
 	for (int row=0; row < (IMHT/4); ++row) {
-		for (int column=0; column < IMWD; ++column) {
-            uchar val;
+		for (int column=0; column < IMWD/8; ++column) {
+			uint8_t val;
             worker_3 :> val;
             c_out <: val;
 		}
 	}
 	for (int row=0; row < (IMHT/4); ++row) {
-		for (int column=0; column < IMWD; ++column) {
-            uchar val;
+		for (int column=0; column < IMWD/8; ++column) {
+			uint8_t val;
             worker_4 :> val;
             c_out <: val;
 		}
