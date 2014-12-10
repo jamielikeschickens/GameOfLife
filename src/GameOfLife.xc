@@ -27,12 +27,12 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test16.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout16.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test256.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout256.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 0
-#define SHOW_DATA_OUT 1
+#define SHOW_DATA_OUT 0
 
 /////////////////////////////////////////////////////////////////////////////////////////
 //
