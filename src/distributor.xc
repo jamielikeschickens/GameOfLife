@@ -21,12 +21,12 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4);
 
 void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener) {
-	//This code is to be replaced – it is a place holder for farming out the work...
 
 	int button;
 	to_button_listener :> button;
 	to_button_listener <: CONTINUE;
 
+	// Block here until receive process image button press
 	while (button != BUTTON_A) {
 		to_button_listener :> button;
 		to_button_listener <: CONTINUE;
@@ -36,7 +36,7 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
     // Wait for workers to send back the overlapping lines so we can send them back out
     harvest_results(c_out, to_button_listener, to_visualiser, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 
-    printf("Distributor temrinate\n");
+    printf("Distributor terminated\n");
 }
 
 void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
@@ -48,14 +48,15 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
         to_worker_1 <: val;
     }
 
-    // Send lines 1-5 to workers
+    // Send lines first block + first line of second block to workers
     for (int y = 1; y <= (IMHT/4)+1; ++y) {
         for (int x = 0; x < IMWD; x+=8) {
             // Else send the actual data
             c_in :> val;
             to_worker_1 <: val;
 
-            // If we're reading lines 4 or 5 we need to send them to worker 2 as well
+            // If we're reading bottom line of first block or first line of second block
+            // we need to send them to worker 2 as well
             if (y == (IMHT/4) || y == (IMHT/4)+1) {
                 to_worker_2 <: val;
             }
@@ -68,7 +69,8 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
             c_in :> val;
             to_worker_2 <: val;
 
-            // If we're reading lines 8 or 9 we need to send them to worker 3 as well
+            // If we're reading bottom line of second block or first line of third block
+            // we need to send them to worker 3 as well
             if (y == (IMHT/2) || y == (IMHT/2)+1) {
                 to_worker_3 <: val;
             }
@@ -81,7 +83,8 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
             c_in :> val;
             to_worker_3 <: val;
 
-            // If we're reading lines 12 or 13 we need to send them to worker 4 as well
+            // If we're reading bottom line of third block or first line of fourth block
+            // we need to send them to worker 4 as well
             if (y == (3*IMHT/4) || y == (3*IMHT/4)+1) {
                 to_worker_4 <: val;
             }
@@ -167,7 +170,6 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 				case to_button_listener :> button:
 					if (button == BUTTON_B) {
 						to_button_listener <: CONTINUE;
-						printf("Button B pressed");
 						if (is_paused == 0) {
 							is_paused = 1;
 							to_visualiser <: (int)floor(log(iteration_count)); // Display log of iteration count
@@ -175,7 +177,6 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 							is_paused = 0;
 						}
 					} else if (button == BUTTON_C) {
-						printf("hello");
 						to_button_listener <: CONTINUE;
 						print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 					} else if (button == BUTTON_D) {
@@ -191,7 +192,6 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 						} else {
 							to_worker_1 <: CONTINUE;
 						}
-						//printf("Still getting asked if we should pause\n");
 					} else if (cmd == FINISH_PROCESSING) {
 						++workers_finished;
 					}
@@ -296,7 +296,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
             for (int i=0; i < IMWD/8; ++i) {
                 uint8_t val = 0;
                 to_worker_4 <: worker_lines[5][i];
-                // Bottom row for 4 is blank as before so set those
+                // Bottom row sent to worker 4 is buffer so set cells to 0
                 to_worker_4 <: val;
 
             }
@@ -312,6 +312,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
     }
 }
 
+//  Receieve all data sent from workers and send to data out
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
 	c_out <: RETURN_DATA;
 
