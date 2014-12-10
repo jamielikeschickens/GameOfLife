@@ -15,7 +15,7 @@
 #define FINISH_PROCESSING 50
 
 
-void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener);
+void distributor(chanend c_in,  chanend c_out, chanend to_visualiser, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4, chanend to_button_listener);
 
 
 #endif /* DISTRIBUTOR_H_ */

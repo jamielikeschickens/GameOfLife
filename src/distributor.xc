@@ -16,11 +16,11 @@ timer t;
 uint32_t start_time;
 uint32_t end_time;
 
-void harvest_results(chanend c_out, chanend button_listener, chanend to_visaliser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
-void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4);
-void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4);
+void harvest_results(chanend c_out, chanend button_listener, chanend to_visaliser, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4);
+void processImage(chanend c_out, chanend c_in, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4);
+void receiveAllData(chanend c_out, streaming chanend worker_1, streaming chanend worker_2, streaming chanend worker_3, streaming chanend worker_4);
 
-void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4, chanend to_button_listener) {
+void distributor(chanend c_in, chanend c_out, chanend to_visualiser, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4, chanend to_button_listener) {
 	//This code is to be replaced – it is a place holder for farming out the work...
 
 	int button;
@@ -39,7 +39,7 @@ void distributor(chanend c_in, chanend c_out, chanend to_visualiser, chanend to_
     printf("Distributor temrinate\n");
 }
 
-void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void processImage(chanend c_out, chanend c_in, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4) {
     printf("ProcessImage:Start, size = %dx%d\n", IMHT, IMWD);
 
     uint8_t val;
@@ -106,7 +106,7 @@ void processImage(chanend c_out, chanend c_in, chanend to_worker_1, chanend to_w
 
 }
 
-void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visualiser, streaming chanend worker_1, streaming chanend worker_2, streaming chanend worker_3, streaming chanend worker_4) {
 	// Wait for the next pause question then tell it to terminate
 	int c;
 	worker_1 :> c;
@@ -124,7 +124,7 @@ void terminate_all(chanend c_out, chanend to_button_listener, chanend to_visuali
 	to_button_listener <: TERMINATE;
 }
 
-void print_grid(chanend c_out, chanend to_button_listener, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+void print_grid(chanend c_out, chanend to_button_listener, streaming chanend worker_1, streaming chanend worker_2, streaming chanend worker_3, streaming chanend worker_4) {
 	// Wait for the next pause question then tell it to terminate
 	int c;
 	worker_1 :> c;
@@ -141,7 +141,7 @@ void print_grid(chanend c_out, chanend to_button_listener, chanend worker_1, cha
 	receiveAllData(c_out, worker_1, worker_2, worker_3, worker_4);
 }
 
-void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, chanend to_worker_1, chanend to_worker_2, chanend to_worker_3, chanend to_worker_4) {
+void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visualiser, streaming chanend to_worker_1, streaming chanend to_worker_2, streaming chanend to_worker_3, streaming chanend to_worker_4) {
 	unsigned int iteration_count = 0;
 	int should_not_terminate = 1;
 
@@ -312,7 +312,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
     }
 }
 
-void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
+void receiveAllData(chanend c_out, streaming chanend worker_1, streaming chanend worker_2, streaming chanend worker_3, streaming chanend worker_4) {
 	c_out <: RETURN_DATA;
 
 	for (int row=0; row < (IMHT/4); ++row) {

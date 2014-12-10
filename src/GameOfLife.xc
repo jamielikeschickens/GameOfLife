@@ -27,8 +27,8 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test272.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout272.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test256.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout256.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 0
@@ -375,7 +375,7 @@ int hamming_weight(uint8_t num) {
 	return count;
 }
 
-void worker(chanend to_distributor) {
+void worker(streaming chanend to_distributor) {
     uchar grid[(IMHT/4)+2][IMWD/8]; // Divide by 8 for group bytes of cells
     int should_not_terminate = 1;
 
@@ -546,7 +546,8 @@ void DataOutStream(char outfname[], chanend c_in) {
 int main(void) {
 	chan c_inIO, c_outIO; //extend your channel definitions here
 
-	chan worker_1, worker_2, worker_3, worker_4, to_distributor, quadrant0, quadrant1, quadrant2, quadrant3, to_visualiser; //helper channels for LED visualisation
+	streaming chan worker_1, worker_2, worker_3, worker_4;
+	chan to_distributor, quadrant0, quadrant1, quadrant2, quadrant3, to_visualiser; //helper channels for LED visualisation
 
 
 	par //extend/change this par statement
