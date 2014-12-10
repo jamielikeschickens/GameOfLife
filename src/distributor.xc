@@ -305,6 +305,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 				t :> end_time;
 				float time_ms = (float)(end_time - start_time) / 100000.0;
 				printf("100 iterations in %fms\n", time_ms);
+				print_grid(c_out, to_button_listener, to_worker_1, to_worker_2, to_worker_3, to_worker_4);
 			}
 		}
 

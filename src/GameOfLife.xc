@@ -27,8 +27,8 @@ out port cled3 = PORT_CLOCKLED_3;
 out port cledG = PORT_CLOCKLED_SELG;
 out port cledR = PORT_CLOCKLED_SELR;
 
-char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test256.pgm"; //put your input image path here, absolute path
-char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout256.pgm"; //put your output image path here, absolute path
+char infname[] = "/Users/jamie/Code/xc/GameOfLife/src/test272.pgm"; //put your input image path here, absolute path
+char outfname[] = "/Users/jamie/Code/xc/GameOfLife/src/testout272.pgm"; //put your output image path here, absolute path
 
 // Best to only display one at a time otherwise they will get mixed up in printing
 #define SHOW_DATA_IN 0
@@ -486,13 +486,13 @@ void DataOutStream(char outfname[], chanend c_in) {
 	int res;
 	uchar line[IMWD];
 	printf("DataOutStream:Start...\n");
-	res = _openoutpgm(outfname, IMWD, IMHT);
-	if (res) {
-		printf("DataOutStream:Error opening %s\n.", outfname);
-		return;
-	}
+
+
+    int count = 0;
+
 	while (1) {
-		int count = 0;
+
+
 		int command;
 		c_in :> command;
 
@@ -501,6 +501,11 @@ void DataOutStream(char outfname[], chanend c_in) {
 			_closeoutpgm();
 			return;
 		} else {
+			res = _openoutpgm(outfname, IMWD, IMHT);
+            if (res) {
+                printf("DataOutStream:Error opening %s\n.", outfname);
+                return;
+            }
 			printf("yo start printing\n");
 			for (int y = 0; y < IMHT; y++) {
 				for (int x = 0; x < IMWD/8; x++) {
@@ -523,11 +528,13 @@ void DataOutStream(char outfname[], chanend c_in) {
 					}
 				}
 
+				_writeoutline( line, IMWD );
+
 #if SHOW_DATA_OUT
 				printf("\n");
-				_writeoutline( line, IMWD );
 #endif
 			}
+			_closeoutpgm();
 			++count;
 		}
 		printf( "DataOutStream%d:Done...\n", count);
