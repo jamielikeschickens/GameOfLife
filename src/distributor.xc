@@ -315,6 +315,7 @@ void harvest_results(chanend c_out, chanend to_button_listener, chanend to_visua
 //  Receieve all data sent from workers and send to data out
 void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend worker_3, chanend worker_4) {
 	c_out <: RETURN_DATA;
+	printf("RetrieveAllData:Start");
 
 	for (int row=0; row < (IMHT/4); ++row) {
 		for (int column=0; column < IMWD/8; ++column) {
@@ -345,4 +346,5 @@ void receiveAllData(chanend c_out, chanend worker_1, chanend worker_2, chanend w
             c_out <: val;
 		}
 	}
+	printf("RetrieveAllData:Start");
 }
